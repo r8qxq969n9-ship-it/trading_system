@@ -3,6 +3,8 @@
 CI 실패 시 로그를 분석하고 자동 수정 가능한 이슈를 처리합니다.
 """
 
+import gzip
+import io
 import logging
 import os
 import re
@@ -107,6 +109,138 @@ def parse_run_url(run_url: str) -> tuple[str, str, str]:
     return match.group(1), match.group(2), match.group(3)
 
 
+def get_failed_job_and_step(owner: str, repo: str, run_id: str, token: str) -> tuple[str | None, str | None]:
+    """GitHub Jobs API를 사용하여 실패한 job과 step 찾기.
+    
+    Returns:
+        (failed_job_name, failed_step_name)
+    """
+    url = f"{GITHUB_API_BASE}/repos/{owner}/{repo}/actions/runs/{run_id}/jobs"
+    headers = {
+        "Authorization": f"token {token}",
+        "Accept": "application/vnd.github.v3+json",
+    }
+    
+    try:
+        response = httpx.get(url, headers=headers, params={"per_page": 100}, timeout=30.0)
+        response.raise_for_status()
+        data = response.json()
+        
+        jobs = data.get("jobs", [])
+        for job in jobs:
+            if job.get("conclusion") == "failure":
+                job_name = job.get("name", "unknown")
+                # 실패한 step 찾기
+                steps = job.get("steps", [])
+                for step in steps:
+                    if step.get("conclusion") == "failure":
+                        step_name = step.get("name", "unknown")
+                        return job_name, step_name
+                # step이 없으면 job name 반환
+                return job_name, job_name
+        
+        # 실패한 job이 없으면 첫 번째 job 반환 (fallback)
+        if jobs:
+            return jobs[0].get("name", "unknown"), "unknown"
+        
+        return None, None
+    except httpx.HTTPError as e:
+        logger.error(f"Failed to get jobs: {e}")
+        return None, None
+    except Exception as e:
+        logger.error(f"Error getting failed job/step: {e}")
+        return None, None
+
+
+def get_job_logs(owner: str, repo: str, job_id: int, token: str) -> str:
+    """Job logs 다운로드 및 파싱.
+    
+    Returns:
+        로그 텍스트 (최대 40줄의 에러 부분)
+    """
+    url = f"{GITHUB_API_BASE}/repos/{owner}/{repo}/actions/jobs/{job_id}/logs"
+    headers = {
+        "Authorization": f"token {token}",
+        "Accept": "application/vnd.github.v3+json",
+    }
+    
+    try:
+        response = httpx.get(url, headers=headers, timeout=60.0, follow_redirects=True)
+        response.raise_for_status()
+        
+        # Content-Type 확인
+        content_type = response.headers.get("content-type", "")
+        content = response.content
+        
+        # gzip 압축 해제 시도
+        if "gzip" in content_type or content.startswith(b"\x1f\x8b"):
+            try:
+                content = gzip.decompress(content)
+            except Exception:
+                pass  # gzip이 아니면 그대로 사용
+        
+        # 텍스트로 변환
+        try:
+            text = content.decode("utf-8")
+        except UnicodeDecodeError:
+            text = content.decode("utf-8", errors="ignore")
+        
+        # 마지막 에러 부분 추출 (최대 40줄)
+        lines = text.split("\n")
+        # 에러가 있는 부분 찾기
+        error_lines = []
+        for i in range(len(lines) - 1, max(0, len(lines) - 100), -1):
+            line = lines[i]
+            if any(keyword in line.lower() for keyword in ["error", "failed", "exception", "traceback"]):
+                error_lines.insert(0, line)
+                if len(error_lines) >= 40:
+                    break
+        
+        if error_lines:
+            return "\n".join(error_lines[-40:])
+        
+        # 에러가 없으면 마지막 40줄 반환
+        return "\n".join(lines[-40:])
+        
+    except httpx.HTTPStatusError as e:
+        logger.error(f"Failed to fetch logs: status_code={e.response.status_code}, body={e.response.text[:500]}")
+        return f"could not fetch logs: status_code={e.response.status_code}, body={e.response.text[:200]}"
+    except httpx.HTTPError as e:
+        logger.error(f"Failed to fetch logs: {e}")
+        return f"could not fetch logs: {str(e)}"
+    except Exception as e:
+        logger.error(f"Error parsing logs: {e}")
+        return f"could not parse logs: {str(e)}"
+
+
+def get_failed_job_id(owner: str, repo: str, run_id: str, token: str) -> int | None:
+    """실패한 job의 ID 가져오기."""
+    url = f"{GITHUB_API_BASE}/repos/{owner}/{repo}/actions/runs/{run_id}/jobs"
+    headers = {
+        "Authorization": f"token {token}",
+        "Accept": "application/vnd.github.v3+json",
+    }
+    
+    try:
+        response = httpx.get(url, headers=headers, params={"per_page": 100}, timeout=30.0)
+        response.raise_for_status()
+        data = response.json()
+        
+        jobs = data.get("jobs", [])
+        for job in jobs:
+            if job.get("conclusion") == "failure":
+                return job.get("id")
+        
+        # 실패한 job이 없으면 첫 번째 job 반환
+        if jobs:
+            return jobs[0].get("id")
+        
+        return None
+    except Exception as e:
+        logger.error(f"Error getting failed job ID: {e}")
+        return None
+
+
 def download_workflow_logs(owner: str, repo: str, run_id: str, token: str) -> str:
     """워크플로우 run의 로그 다운로드."""
     url = f"{GITHUB_API_BASE}/repos/{owner}/{repo}/actions/runs/{run_id}/logs"
@@ -124,73 +258,56 @@ def download_workflow_logs(owner: str, repo: str, run_id: str, token: str) -> st
         raise
 
 
-def analyze_ci_logs(logs: str) -> dict[str, Any]:
-    """CI 로그를 분석하여 실패 원인 추출."""
-    failure_reason = CIFailureReason.UNKNOWN
-    failed_step = None
+def map_failure_reason(step_name: str | None, job_name: str | None) -> str:
+    """Step name 또는 job name으로부터 failure_reason 매핑."""
+    if not step_name and not job_name:
+        return CIFailureReason.UNKNOWN
+    
+    search_text = (step_name or "").lower() + " " + (job_name or "").lower()
+    
+    if "ruff" in search_text:
+        return CIFailureReason.RUFF_LINT
+    elif "black" in search_text:
+        return CIFailureReason.BLACK_FORMAT
+    elif "alembic" in search_text or "migration" in search_text:
+        return CIFailureReason.MIGRATION_FAILURE
+    elif "pytest" in search_text or "test" in search_text:
+        return CIFailureReason.TEST_FAILURE
+    else:
+        return CIFailureReason.UNKNOWN
+
+
+def analyze_ci_failure(owner: str, repo: str, run_id: str, token: str) -> dict[str, Any]:
+    """GitHub Jobs API를 사용하여 CI 실패 원인 분석."""
+    # 실패한 job과 step 찾기
+    failed_job, failed_step = get_failed_job_and_step(owner, repo, run_id, token)
+    
+    # failure_reason 매핑
+    failure_reason = map_failure_reason(failed_step, failed_job)
+    
+    # 실패한 job ID 가져오기
+    job_id = get_failed_job_id(owner, repo, run_id, token)
+    
+    # 로그 가져오기
     error_message = ""
-
-    # ruff 실패 감지
-    if re.search(r"ruff check", logs, re.IGNORECASE) and re.search(
-        r"error|failed|exit code [1-9]", logs, re.IGNORECASE
-    ):
-        failure_reason = CIFailureReason.RUFF_LINT
-        failed_step = "Lint with ruff"
-        # ruff 오류 메시지 추출
-        ruff_errors = re.findall(r"ruff check.*?(?=\n\n|\n[A-Z]|\Z)", logs, re.DOTALL | re.IGNORECASE)
-        if ruff_errors:
-            error_message = ruff_errors[-1][:500]  # 최대 500자
-
-    # black 실패 감지
-    elif re.search(r"black --check", logs, re.IGNORECASE) and re.search(
-        r"would reformat|reformatted|exit code [1-9]", logs, re.IGNORECASE
-    ):
-        failure_reason = CIFailureReason.BLACK_FORMAT
-        failed_step = "Format check with black"
-        # black 오류 메시지 추출
-        black_errors = re.findall(r"black.*?(?=\n\n|\n[A-Z]|\Z)", logs, re.DOTALL | re.IGNORECASE)
-        if black_errors:
-            error_message = black_errors[-1][:500]
-
-    # pytest 실패 감지
-    elif re.search(r"pytest", logs, re.IGNORECASE) and re.search(
-        r"FAILED|ERROR|failed|error", logs, re.IGNORECASE
-    ):
-        failure_reason = CIFailureReason.TEST_FAILURE
-        failed_step = "Test with pytest"
-        # pytest 오류 메시지 추출
-        pytest_errors = re.findall(r"FAILED.*?(?=\n\n|\n[A-Z]|\Z)", logs, re.DOTALL | re.IGNORECASE)
-        if pytest_errors:
-            error_message = pytest_errors[-1][:500]
-
-    # migration 실패 감지
-    elif re.search(r"alembic|migration", logs, re.IGNORECASE) and re.search(
-        r"error|failed|exception", logs, re.IGNORECASE
-    ):
-        failure_reason = CIFailureReason.MIGRATION_FAILURE
-        failed_step = "Run database migrations"
-        migration_errors = re.findall(
-            r"alembic.*?(?=\n\n|\n[A-Z]|\Z)", logs, re.DOTALL | re.IGNORECASE
-        )
-        if migration_errors:
-            error_message = migration_errors[-1][:500]
-
-    # 의존성 설치 실패 감지
-    elif re.search(r"pip install|install dependencies", logs, re.IGNORECASE) and re.search(
-        r"error|failed|exit code [1-9]", logs, re.IGNORECASE
-    ):
-        failure_reason = CIFailureReason.DEPENDENCY_FAILURE
-        failed_step = "Install dependencies"
-        dep_errors = re.findall(
-            r"pip install.*?(?=\n\n|\n[A-Z]|\Z)", logs, re.DOTALL | re.IGNORECASE
-        )
-        if dep_errors:
-            error_message = dep_errors[-1][:500]
-
+    if job_id:
+        error_message = get_job_logs(owner, repo, job_id, token)
+    else:
+        error_message = "could not fetch logs: job_id not found"
+    
+    # failed_step이 없으면 job name 사용
+    if not failed_step:
+        failed_step = failed_job or "unknown"
+    
+    # failed_job이 없으면 job name 사용
+    if not failed_job:
+        failed_job = "unknown"
+    
     return {
         "failure_reason": failure_reason,
         "failed_step": failed_step,
-        "error_message": error_message[:500] if error_message else "No specific error message found",
+        "failed_job": failed_job,
+        "error_message": error_message[:2000] if error_message else "No specific error message found",
     }
 
 
@@ -312,11 +429,14 @@ def commit_and_push(retry_count: int, failure_reason: str) -> bool:
 def main():
     """메인 로직."""
     # 환경변수에서 필요한 정보 가져오기
-    run_url = os.getenv("GITHUB_RUN_URL")
+    run_id = os.getenv("TARGET_RUN_ID")
+    run_url = os.getenv("TARGET_RUN_URL")
+    target_sha = os.getenv("TARGET_SHA", "")
+    target_branch = os.getenv("TARGET_BRANCH", "")
     github_token = get_github_token()
 
-    if not run_url:
-        logger.error("GITHUB_RUN_URL environment variable is required")
+    if not run_id or not run_url:
+        logger.error("TARGET_RUN_ID and TARGET_RUN_URL environment variables are required")
         sys.exit(1)
 
     # 재시도 횟수 계산 (환경변수 또는 커밋 히스토리에서)
@@ -341,38 +461,47 @@ def main():
 
     logger.info(f"Starting CI auto-fix agent (retry {retry_count + 1}/{MAX_RETRIES})")
     logger.info(f"Run URL: {run_url}")
+    logger.info(f"Run ID: {run_id}")
+    logger.info(f"Target SHA: {target_sha[:7] if target_sha else 'unknown'}")
 
     try:
         # URL 파싱
-        owner, repo, run_id = parse_run_url(run_url)
+        owner, repo, _ = parse_run_url(run_url)
 
-        # 로그 다운로드
-        logger.info("Downloading workflow logs...")
-        logs = download_workflow_logs(owner, repo, run_id, github_token)
-
-        # 로그 분석
-        logger.info("Analyzing logs...")
-        analysis = analyze_ci_logs(logs)
+        # CI 실패 분석 (Jobs API 사용)
+        logger.info("Analyzing CI failure using Jobs API...")
+        analysis = analyze_ci_failure(owner, repo, run_id, github_token)
         failure_reason = analysis["failure_reason"]
         failed_step = analysis["failed_step"]
+        failed_job = analysis["failed_job"]
         error_message = analysis["error_message"]
 
         logger.info(f"Failure reason: {failure_reason}")
+        logger.info(f"Failed job: {failed_job}")
         logger.info(f"Failed step: {failed_step}")
+
+        # 에러 메시지 스니펫 추출 (20-40줄)
+        error_lines = error_message.split("\n")
+        error_snippet = "\n".join(error_lines[-40:]) if len(error_lines) > 40 else error_message
+        if len(error_snippet) > 2000:
+            error_snippet = error_snippet[-2000:]
 
         # 자동 수정 가능 여부 확인
         if not can_auto_fix(failure_reason):
             logger.warning(f"Cannot auto-fix: {failure_reason}")
-            # DECISION_REQUIRED 알림
+            # DECISION_REQUIRED 알림 (개선된 메시지)
             send(
                 AlertLevel.DECISION_REQUIRED,
                 "decisions",
                 "CI Auto-Fix: Manual Intervention Required",
                 {
                     "run_url": run_url,
+                    "target_sha7": target_sha[:7] if target_sha else "unknown",
+                    "target_branch": target_branch,
+                    "failed_job": failed_job or "unknown",
+                    "failed_step": failed_step or "unknown",
                     "failure_reason": failure_reason,
-                    "failed_step": failed_step,
-                    "error_message": error_message,
+                    "error_snippet": error_snippet,
                     "retry_count": retry_count,
                     "recommended_action": "Review the CI failure and fix manually",
                 },
@@ -413,8 +542,10 @@ def main():
                 "CI Auto-Fix: Fixes Applied",
                 {
                     "run_url": run_url,
+                    "target_sha7": target_sha[:7] if target_sha else "unknown",
+                    "failed_job": failed_job or "unknown",
+                    "failed_step": failed_step or "unknown",
                     "failure_reason": failure_reason,
-                    "failed_step": failed_step,
                     "retry_count": retry_count + 1,
                     "message": "Automatic fixes applied and pushed. CI will rerun.",
                 },
@@ -430,7 +561,8 @@ def main():
             "dev",
             "CI Auto-Fix: Error",
             {
-                "run_url": run_url,
+                "run_url": run_url or "unknown",
+                "target_sha7": target_sha[:7] if target_sha else "unknown",
                 "retry_count": retry_count,
                 "error": str(e),
             },

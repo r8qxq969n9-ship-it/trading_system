@@ -1,0 +1,7 @@
+symbol,name,type,enabled
+AAPL,Apple Inc,STOCK,true
+TSLA,Tesla Inc,STOCK,true
+MSFT,Microsoft Corporation,STOCK,true
+NVDA,NVIDIA Corporation,STOCK,true
+GOOGL,Alphabet Inc,STOCK,true
+

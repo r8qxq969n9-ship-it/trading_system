@@ -7,8 +7,14 @@ class OrderBuilder:
     """Order builder."""
 
     @staticmethod
-    def build_orders(plan_items: list[dict], cash_available: float) -> list[dict]:
-        """Build orders from plan items. SELL first, then BUY."""
+    def build_orders(plan_items: list[dict], cash_available: float, nav: float) -> list[dict]:
+        """Build orders from plan items. SELL first, then BUY.
+        
+        Args:
+            plan_items: List of plan items with delta_weight (as NAV ratio)
+            cash_available: Available cash
+            nav: Net Asset Value (for weight to qty conversion)
+        """
         orders = []
         sell_orders = []
         buy_orders = []
@@ -20,8 +26,9 @@ class OrderBuilder:
             current_price = float(item.get("current_price", 0))
 
             if delta_weight < 0:
-                # SELL
-                qty = abs(delta_weight) / current_price if current_price > 0 else 0
+                # SELL: delta_weight is negative, convert to qty
+                # qty = abs(delta_weight) * nav / current_price
+                qty = abs(delta_weight) * nav / current_price if current_price > 0 else 0
                 sell_orders.append(
                     {
                         "symbol": symbol,
@@ -33,8 +40,10 @@ class OrderBuilder:
                     }
                 )
             elif delta_weight > 0:
-                # BUY
-                qty = delta_weight / current_price if current_price > 0 else 0
+                # BUY: delta_weight is positive, convert to qty and cost
+                # qty = delta_weight * nav / current_price
+                qty = delta_weight * nav / current_price if current_price > 0 else 0
+                estimated_cost = delta_weight * nav  # Cost in absolute terms
                 buy_orders.append(
                     {
                         "symbol": symbol,
@@ -43,7 +52,7 @@ class OrderBuilder:
                         "order_type": "LIMIT",
                         "limit_price": current_price,
                         "market": market,
-                        "estimated_cost": delta_weight,
+                        "estimated_cost": estimated_cost,
                     }
                 )
 
