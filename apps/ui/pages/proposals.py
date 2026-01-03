@@ -1,7 +1,9 @@
 """Proposals page."""
 
 import streamlit as st
+
 from apps.ui.utils import api_get
+
 
 def render():
     """Render proposals page."""
@@ -20,5 +22,4 @@ def render():
         with st.expander(f"Plan {plan['id'][:8]} - {plan['status']}"):
             st.json(plan)
             if plan["status"] == "PROPOSED":
-                st.button(f"View Details", key=f"view_{plan['id']}")
-
+                st.button("View Details", key=f"view_{plan['id']}")

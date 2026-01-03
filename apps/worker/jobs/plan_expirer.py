@@ -4,7 +4,7 @@ import logging
 from datetime import datetime
 
 from packages.core.database import get_session_factory
-from packages.core.models import RebalancePlan, PlanStatus
+from packages.core.models import PlanStatus, RebalancePlan
 
 logger = logging.getLogger(__name__)
 SessionLocal = get_session_factory()
@@ -16,10 +16,14 @@ def run():
     db = SessionLocal()
     try:
         now = datetime.utcnow()
-        expired = db.query(RebalancePlan).filter(
-            RebalancePlan.status == PlanStatus.PROPOSED,
-            RebalancePlan.expires_at < now,
-        ).all()
+        expired = (
+            db.query(RebalancePlan)
+            .filter(
+                RebalancePlan.status == PlanStatus.PROPOSED,
+                RebalancePlan.expires_at < now,
+            )
+            .all()
+        )
 
         for plan in expired:
             plan.status = PlanStatus.EXPIRED
@@ -32,4 +36,3 @@ def run():
         db.rollback()
     finally:
         db.close()
-

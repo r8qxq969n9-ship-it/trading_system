@@ -10,4 +10,3 @@ def run():
     logger.info("Plan generator job started")
     # TODO: Implement plan generation logic
     logger.info("Plan generator job completed (stub)")
-

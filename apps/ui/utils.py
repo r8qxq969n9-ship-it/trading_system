@@ -1,6 +1,7 @@
 """UI utilities."""
 
 import os
+
 import httpx
 
 API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8000")
@@ -24,4 +25,3 @@ def api_post(endpoint: str, data: dict):
         return response.json()
     except Exception as e:
         return {"error": str(e)}
-

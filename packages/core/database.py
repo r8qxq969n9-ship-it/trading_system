@@ -39,4 +39,3 @@ def init_db(engine=None):
     if engine is None:
         engine = create_engine_from_env()
     Base.metadata.create_all(bind=engine)
-

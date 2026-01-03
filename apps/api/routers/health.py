@@ -14,4 +14,3 @@ async def health_check(db: Session = Depends(get_db)):
     """Health check endpoint."""
     health_data = check_health(db)
     return health_data
-

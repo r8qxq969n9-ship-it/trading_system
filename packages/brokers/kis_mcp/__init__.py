@@ -1,2 +1,1 @@
 """KIS MCP adapter."""
-

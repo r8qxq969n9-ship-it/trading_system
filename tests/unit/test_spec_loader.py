@@ -1,7 +1,8 @@
 """Test spec loader."""
 
 import pytest
-from packages.brokers.kis_direct.spec_loader import SpecLoader, APISpecNotFoundError
+
+from packages.brokers.kis_direct.spec_loader import APISpecNotFoundError, SpecLoader
 
 
 def test_list_available_apis():
@@ -27,4 +28,3 @@ def test_get_api_not_found():
     loader = SpecLoader()
     with pytest.raises(APISpecNotFoundError):
         loader.get_api("NON_EXISTENT_API")
-

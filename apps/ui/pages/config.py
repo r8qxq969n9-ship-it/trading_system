@@ -1,7 +1,9 @@
 """Config page."""
 
 import streamlit as st
+
 from apps.ui.utils import api_get, api_post
+
 
 def render():
     """Render config page."""
@@ -34,4 +36,3 @@ def render():
                 st.rerun()
             else:
                 st.error(f"Error: {result['error']}")
-

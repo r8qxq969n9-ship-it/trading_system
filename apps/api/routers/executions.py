@@ -1,14 +1,14 @@
 """Executions router."""
 
+from datetime import datetime
+from uuid import UUID
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
-from uuid import UUID
-from datetime import datetime
-from typing import Optional
 
 from apps.api.main import get_db
-from packages.core.models import Execution, ExecutionStatus, RebalancePlan
-from packages.core.schemas import ExecutionStartRequest, ExecutionResponse
+from packages.core.models import Execution, ExecutionStatus
+from packages.core.schemas import ExecutionResponse, ExecutionStartRequest
 from packages.ops.guards import check_kill_switch, check_plan_approved
 
 router = APIRouter()
@@ -24,8 +24,8 @@ async def start_execution(
     # Check kill switch
     check_kill_switch(db)
 
-    # Check plan approved
-    plan = check_plan_approved(db, str(plan_id))
+    # Check plan approved (raises if not approved)
+    check_plan_approved(db, str(plan_id))
 
     # Check if execution already exists (idempotency)
     existing = db.query(Execution).filter(Execution.plan_id == plan_id).first()
@@ -63,9 +63,9 @@ async def start_execution(
 
 @router.get("", response_model=list[ExecutionResponse])
 async def list_executions(
-    status: Optional[ExecutionStatus] = Query(None),
-    from_date: Optional[datetime] = Query(None, alias="from"),
-    to_date: Optional[datetime] = Query(None, alias="to"),
+    status: ExecutionStatus | None = Query(None),
+    from_date: datetime | None = Query(None, alias="from"),
+    to_date: datetime | None = Query(None, alias="to"),
     db: Session = Depends(get_db),
 ):
     """List executions."""
@@ -75,15 +75,18 @@ async def list_executions(
     # TODO: Add date filters
     executions = query.order_by(Execution.started_at.desc()).all()
 
-    return [ExecutionResponse(
-        id=e.id,
-        plan_id=e.plan_id,
-        status=e.status,
-        started_at=e.started_at,
-        ended_at=e.ended_at,
-        policy=e.policy,
-        error=e.error,
-    ) for e in executions]
+    return [
+        ExecutionResponse(
+            id=e.id,
+            plan_id=e.plan_id,
+            status=e.status,
+            started_at=e.started_at,
+            ended_at=e.ended_at,
+            policy=e.policy,
+            error=e.error,
+        )
+        for e in executions
+    ]
 
 
 @router.get("/{execution_id}", response_model=ExecutionResponse)
@@ -102,4 +105,3 @@ async def get_execution(execution_id: UUID, db: Session = Depends(get_db)):
         policy=execution.policy,
         error=execution.error,
     )
-

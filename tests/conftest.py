@@ -5,7 +5,6 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from packages.core.models import Base
-from packages.core.database import get_database_url
 
 
 @pytest.fixture(scope="function")
@@ -14,8 +13,8 @@ def db_session():
     # Use in-memory SQLite for tests
     engine = create_engine("sqlite:///:memory:", echo=False)
     Base.metadata.create_all(engine)
-    SessionLocal = sessionmaker(bind=engine)
-    session = SessionLocal()
+    session_local = sessionmaker(bind=engine)
+    session = session_local()
     try:
         yield session
     finally:
@@ -27,6 +26,7 @@ def db_session():
 def test_client():
     """Create a test client."""
     from fastapi.testclient import TestClient
-    from apps.api.main import app
-    return TestClient(app)
 
+    from apps.api.main import app
+
+    return TestClient(app)

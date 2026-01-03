@@ -25,4 +25,3 @@ async def get_latest_portfolio(db: Session = Depends(get_db)):
         nav=float(snapshot.nav),
         created_at=snapshot.created_at,
     )
-

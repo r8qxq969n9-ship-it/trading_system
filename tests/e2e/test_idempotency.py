@@ -1,8 +1,18 @@
 """E2E test: idempotency."""
 
-import pytest
 from uuid import uuid4
-from packages.core.models import RebalancePlan, PlanStatus, Execution, ExecutionStatus, Run, RunKind, RunStatus
+
+import pytest
+
+from packages.core.models import (
+    Execution,
+    ExecutionStatus,
+    PlanStatus,
+    RebalancePlan,
+    Run,
+    RunKind,
+    RunStatus,
+)
 
 
 def test_execution_idempotency(db_session):
@@ -38,4 +48,3 @@ def test_execution_idempotency(db_session):
     db_session.add(execution2)
     with pytest.raises(Exception):  # IntegrityError
         db_session.commit()
-

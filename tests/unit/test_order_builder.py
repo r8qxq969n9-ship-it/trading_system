@@ -13,4 +13,3 @@ def test_build_orders_sell_first():
     assert len(orders) >= 2
     # First order should be SELL
     assert orders[0]["side"] == "SELL"
-

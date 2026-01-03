@@ -1,11 +1,12 @@
 """Worker main application with APScheduler."""
 
 import logging
+
 from apscheduler.schedulers.blocking import BlockingScheduler
 from apscheduler.triggers.cron import CronTrigger
 
+from apps.worker.jobs import plan_expirer, plan_generator, reporter
 from packages.ops.logging import setup_logging
-from apps.worker.jobs import plan_generator, plan_expirer, reporter
 
 setup_logging()
 logger = logging.getLogger(__name__)
@@ -48,4 +49,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

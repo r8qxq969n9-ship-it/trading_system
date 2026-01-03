@@ -1,6 +1,7 @@
 """E2E test: kill switch."""
 
 import pytest
+
 from packages.core.models import Control
 from packages.ops.guards import check_kill_switch
 
@@ -15,4 +16,3 @@ def test_kill_switch_blocks_execution(db_session):
     # Try to check - should raise
     with pytest.raises(Exception):  # HTTPException
         check_kill_switch(db_session)
-

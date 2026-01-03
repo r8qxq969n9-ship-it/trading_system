@@ -1,9 +1,11 @@
 """Test guards."""
 
+import os
+
 import pytest
+
 from packages.core.models import Control
 from packages.ops.guards import check_kill_switch, check_live_trading_enabled
-import os
 
 
 def test_check_kill_switch_off(db_session):
@@ -29,4 +31,3 @@ def test_check_live_trading_enabled():
     os.environ["ENABLE_LIVE_TRADING"] = "false"
     with pytest.raises(Exception):  # HTTPException
         check_live_trading_enabled()
-

@@ -31,4 +31,3 @@ async def create_snapshot(
         meta=snapshot.meta,
         created_at=snapshot.created_at,
     )
-

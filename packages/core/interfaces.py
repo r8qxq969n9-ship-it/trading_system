@@ -1,7 +1,7 @@
 """Broker interface."""
 
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from pydantic import BaseModel
 
@@ -13,7 +13,7 @@ class Order(BaseModel):
     side: str  # BUY or SELL
     qty: float
     order_type: str
-    limit_price: Optional[float] = None
+    limit_price: float | None = None
     market: str  # KR or US
 
 
@@ -21,7 +21,7 @@ class Balance(BaseModel):
     """Balance model."""
 
     cash: float
-    positions: Dict[str, Any]
+    positions: dict[str, Any]
 
 
 class Quote(BaseModel):
@@ -46,7 +46,7 @@ class IBroker(ABC):
         pass
 
     @abstractmethod
-    def get_quotes(self, symbols: List[str]) -> List[Quote]:
+    def get_quotes(self, symbols: list[str]) -> list[Quote]:
         """Get quotes for symbols."""
         pass
 
@@ -56,22 +56,21 @@ class IBroker(ABC):
         pass
 
     @abstractmethod
-    def place_order(self, order: Order) -> Dict[str, Any]:
+    def place_order(self, order: Order) -> dict[str, Any]:
         """Place order. In Phase 1, this should raise exception if ENABLE_LIVE_TRADING=false."""
         pass
 
     @abstractmethod
-    def get_orders(self, status: Optional[str] = None) -> List[Dict[str, Any]]:
+    def get_orders(self, status: str | None = None) -> list[dict[str, Any]]:
         """Get orders."""
         pass
 
     @abstractmethod
-    def get_fills(self, order_id: Optional[str] = None) -> List[Dict[str, Any]]:
+    def get_fills(self, order_id: str | None = None) -> list[dict[str, Any]]:
         """Get fills."""
         pass
 
     @abstractmethod
-    def cancel_order(self, order_id: str) -> Dict[str, Any]:
+    def cancel_order(self, order_id: str) -> dict[str, Any]:
         """Cancel order."""
         pass
-

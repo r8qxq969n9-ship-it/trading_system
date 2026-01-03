@@ -1,7 +1,9 @@
 """Controls page."""
 
 import streamlit as st
+
 from apps.ui.utils import api_get, api_post
+
 
 def render():
     """Render controls page."""
@@ -31,4 +33,3 @@ def render():
             if "error" not in result:
                 st.success("Kill switch turned OFF")
                 st.rerun()
-

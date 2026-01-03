@@ -2,7 +2,6 @@
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from uuid import UUID
 
 from apps.api.main import get_db
 from packages.core.models import ConfigVersion
@@ -53,4 +52,3 @@ async def create_config(
         created_at=config.created_at,
         created_by=config.created_by,
     )
-

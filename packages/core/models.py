@@ -1,23 +1,23 @@
 """SQLAlchemy models for trading system."""
 
 import enum
-from datetime import datetime
-from typing import Optional
-from uuid import UUID, uuid4
+from uuid import uuid4
 
 from sqlalchemy import (
     Boolean,
     Column,
-    Enum as SQLEnum,
     ForeignKey,
     Index,
     Integer,
     Numeric,
     Text,
-    UniqueConstraint,
     func,
 )
-from sqlalchemy.dialects.postgresql import JSONB, UUID as PGUUID, TIMESTAMP
+from sqlalchemy import (
+    Enum as SQLEnum,
+)
+from sqlalchemy.dialects.postgresql import JSONB, TIMESTAMP
+from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
 
@@ -166,7 +166,9 @@ class RebalancePlan(Base):
 
     id = Column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
     run_id = Column(PGUUID(as_uuid=True), ForeignKey("runs.id"), nullable=False)
-    config_version_id = Column(PGUUID(as_uuid=True), ForeignKey("config_versions.id"), nullable=False)
+    config_version_id = Column(
+        PGUUID(as_uuid=True), ForeignKey("config_versions.id"), nullable=False
+    )
     data_snapshot_id = Column(PGUUID(as_uuid=True), ForeignKey("data_snapshots.id"), nullable=False)
     status = Column(SQLEnum(PlanStatus), nullable=False, default=PlanStatus.PROPOSED)
     summary = Column(JSONB, nullable=False)
@@ -181,9 +183,7 @@ class RebalancePlan(Base):
     items = relationship("PlanItem", back_populates="plan", cascade="all, delete-orphan")
     execution = relationship("Execution", back_populates="plan", uselist=False)
 
-    __table_args__ = (
-        Index("idx_rebalance_plans_status_created_at", "status", "created_at"),
-    )
+    __table_args__ = (Index("idx_rebalance_plans_status_created_at", "status", "created_at"),)
 
 
 class PlanItem(Base):
@@ -211,7 +211,9 @@ class Execution(Base):
     __tablename__ = "executions"
 
     id = Column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
-    plan_id = Column(PGUUID(as_uuid=True), ForeignKey("rebalance_plans.id"), nullable=False, unique=True)
+    plan_id = Column(
+        PGUUID(as_uuid=True), ForeignKey("rebalance_plans.id"), nullable=False, unique=True
+    )
     status = Column(SQLEnum(ExecutionStatus), nullable=False, default=ExecutionStatus.PENDING)
     started_at = Column(TIMESTAMP(timezone=True), nullable=True)
     ended_at = Column(TIMESTAMP(timezone=True), nullable=True)
@@ -245,9 +247,7 @@ class Order(Base):
     execution = relationship("Execution", back_populates="orders")
     fills = relationship("Fill", back_populates="order", cascade="all, delete-orphan")
 
-    __table_args__ = (
-        Index("idx_orders_plan_id_status", "plan_id", "status"),
-    )
+    __table_args__ = (Index("idx_orders_plan_id_status", "plan_id", "status"),)
 
 
 class Fill(Base):
@@ -301,5 +301,6 @@ class Control(Base):
     id = Column(Integer, primary_key=True, default=1)
     kill_switch = Column(Boolean, nullable=False, default=False)
     reason = Column(Text, nullable=True)
-    updated_at = Column(TIMESTAMP(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now())
-
+    updated_at = Column(
+        TIMESTAMP(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
+    )

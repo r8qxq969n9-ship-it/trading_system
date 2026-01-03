@@ -1,7 +1,9 @@
 """Dashboard page."""
 
 import streamlit as st
+
 from apps.ui.utils import api_get
+
 
 def render():
     """Render dashboard."""
@@ -31,4 +33,3 @@ def render():
     if "error" not in plans and plans:
         for plan in plans[:5]:
             st.write(f"Plan {plan['id'][:8]} - {plan['status']}")
-

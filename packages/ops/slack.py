@@ -3,7 +3,7 @@
 import json
 import logging
 import os
-from typing import Any, Dict, Optional
+from typing import Any
 
 import httpx
 
@@ -16,7 +16,7 @@ def send(
     level: AlertLevel,
     channel: str,
     title: str,
-    body_json: Dict[str, Any],
+    body_json: dict[str, Any],
 ) -> bool:
     """Send Slack notification. Returns True if sent, False if no-op."""
     webhook_url = None
@@ -29,7 +29,9 @@ def send(
         webhook_url = os.getenv("SLACK_WEBHOOK_DECISIONS")
 
     if not webhook_url:
-        logger.info(f"Slack webhook not configured for channel '{channel}', skipping notification: {title}")
+        logger.info(
+            f"Slack webhook not configured for channel '{channel}', skipping notification: {title}"
+        )
         return False
 
     # Format message
@@ -60,4 +62,3 @@ def send(
     except Exception as e:
         logger.error(f"Failed to send Slack notification: {e}")
         return False
-

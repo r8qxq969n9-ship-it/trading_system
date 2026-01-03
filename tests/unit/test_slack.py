@@ -1,8 +1,9 @@
 """Test Slack (no-op)."""
 
 import os
-from packages.ops.slack import send
+
 from packages.core.models import AlertLevel
+from packages.ops.slack import send
 
 
 def test_slack_no_op():
@@ -11,8 +12,7 @@ def test_slack_no_op():
     os.environ.pop("SLACK_WEBHOOK_DEV", None)
     os.environ.pop("SLACK_WEBHOOK_ALERTS", None)
     os.environ.pop("SLACK_WEBHOOK_DECISIONS", None)
-    
+
     # Should return False (no-op) but not raise
     result = send(AlertLevel.INFO, "dev", "Test", {})
     assert result is False
-

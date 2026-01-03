@@ -1,7 +1,9 @@
 """Executions page."""
 
 import streamlit as st
+
 from apps.ui.utils import api_get
+
 
 def render():
     """Render executions page."""
@@ -19,4 +21,3 @@ def render():
     for execution in executions:
         with st.expander(f"Execution {execution['id'][:8]} - {execution['status']}"):
             st.json(execution)
-

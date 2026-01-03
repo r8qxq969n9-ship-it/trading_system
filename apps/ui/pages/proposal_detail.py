@@ -1,7 +1,9 @@
 """Proposal detail page."""
 
 import streamlit as st
+
 from apps.ui.utils import api_get, api_post
+
 
 def render():
     """Render proposal detail page."""
@@ -49,4 +51,3 @@ def render():
                 if "error" not in result:
                     st.success("Plan rejected!")
                     st.rerun()
-

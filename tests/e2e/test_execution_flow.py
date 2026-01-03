@@ -1,8 +1,10 @@
 """E2E test: execution flow (approval required)."""
 
-import pytest
 from uuid import uuid4
-from packages.core.models import RebalancePlan, PlanStatus, Run, RunKind, RunStatus
+
+import pytest
+
+from packages.core.models import PlanStatus, RebalancePlan, Run, RunKind, RunStatus
 
 
 def test_execution_requires_approval(db_session):
@@ -24,6 +26,6 @@ def test_execution_requires_approval(db_session):
 
     # Try to start execution - should fail
     from packages.ops.guards import check_plan_approved
+
     with pytest.raises(Exception):  # HTTPException
         check_plan_approved(db_session, str(plan.id))
-

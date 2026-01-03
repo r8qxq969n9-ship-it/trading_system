@@ -1,6 +1,5 @@
 """Test constraints."""
 
-import pytest
 from packages.core.constraints import ConstraintChecker
 
 
@@ -46,4 +45,3 @@ def test_check_kr_us_split():
     ]
     passed, error = checker.check_kr_us_split(items)
     assert passed
-

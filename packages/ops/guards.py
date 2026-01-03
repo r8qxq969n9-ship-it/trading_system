@@ -1,7 +1,6 @@
 """Guards: kill switch, live trading, plan approval checks."""
 
 import os
-from typing import Optional
 
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
@@ -76,4 +75,3 @@ def check_trading_mode(mode: str) -> None:
     """Check trading mode. Raises HTTPException if LIVE and not enabled."""
     if mode.upper() == "LIVE":
         check_live_trading_enabled()
-

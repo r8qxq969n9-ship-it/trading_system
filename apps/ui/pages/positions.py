@@ -1,7 +1,9 @@
 """Positions page."""
 
 import streamlit as st
+
 from apps.ui.utils import api_get
+
 
 def render():
     """Render positions page."""
@@ -20,4 +22,3 @@ def render():
         st.dataframe(positions)
     else:
         st.info("No positions")
-

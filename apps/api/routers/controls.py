@@ -1,13 +1,13 @@
 """Controls router."""
 
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
 from datetime import datetime
+
+from fastapi import APIRouter, Depends
+from sqlalchemy.orm import Session
 
 from apps.api.main import get_db
 from packages.core.models import Control
-from packages.core.schemas import KillSwitchRequest, ControlResponse
-from packages.ops.guards import check_kill_switch
+from packages.core.schemas import ControlResponse, KillSwitchRequest
 
 router = APIRouter()
 
@@ -45,4 +45,3 @@ async def set_kill_switch(
         control.updated_at = datetime.utcnow()
     db.commit()
     return {"status": "ok", "kill_switch": control.kill_switch}
-

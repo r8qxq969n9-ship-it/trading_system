@@ -1,20 +1,17 @@
 """Pydantic schemas for API requests and responses."""
 
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any
 from uuid import UUID
 
 from pydantic import BaseModel, Field
 
 from packages.core.models import (
-    AlertLevel,
     ExecutionStatus,
     Market,
     OrderSide,
     OrderStatus,
     PlanStatus,
-    RunKind,
-    RunStatus,
     TradingMode,
 )
 
@@ -25,23 +22,23 @@ class ErrorDetail(BaseModel):
 
     code: str
     message: str
-    details: Optional[Dict[str, Any]] = None
-    hint: Optional[str] = None
+    details: dict[str, Any] | None = None
+    hint: str | None = None
 
 
 class ErrorResponse(BaseModel):
     """Error response."""
 
     error: ErrorDetail
-    request_id: Optional[str] = None
-    run_id: Optional[str] = None
+    request_id: str | None = None
+    run_id: str | None = None
 
 
 class SuccessResponse(BaseModel):
     """Success response."""
 
-    request_id: Optional[str] = None
-    run_id: Optional[str] = None
+    request_id: str | None = None
+    run_id: str | None = None
 
 
 # Config
@@ -50,8 +47,8 @@ class ConfigVersionCreate(BaseModel):
 
     mode: TradingMode
     strategy_name: str
-    strategy_params: Dict[str, Any]
-    constraints: Dict[str, Any]
+    strategy_params: dict[str, Any]
+    constraints: dict[str, Any]
     created_by: str
 
 
@@ -61,8 +58,8 @@ class ConfigVersionResponse(BaseModel):
     id: UUID
     mode: TradingMode
     strategy_name: str
-    strategy_params: Dict[str, Any]
-    constraints: Dict[str, Any]
+    strategy_params: dict[str, Any]
+    constraints: dict[str, Any]
     created_at: datetime
     created_by: str
 
@@ -71,8 +68,8 @@ class ConfigVersionResponse(BaseModel):
 class PlanGenerateRequest(BaseModel):
     """Plan generate request."""
 
-    config_version_id: Optional[UUID] = None
-    data_snapshot_id: Optional[UUID] = None
+    config_version_id: UUID | None = None
+    data_snapshot_id: UUID | None = None
 
 
 class PlanItemResponse(BaseModel):
@@ -84,8 +81,8 @@ class PlanItemResponse(BaseModel):
     current_weight: float
     target_weight: float
     delta_weight: float
-    reason: Optional[str] = None
-    checks: Optional[Dict[str, Any]] = None
+    reason: str | None = None
+    checks: dict[str, Any] | None = None
 
 
 class PlanResponse(BaseModel):
@@ -96,14 +93,14 @@ class PlanResponse(BaseModel):
     config_version_id: UUID
     data_snapshot_id: UUID
     status: PlanStatus
-    summary: Dict[str, Any]
+    summary: dict[str, Any]
     created_at: datetime
-    approved_at: Optional[datetime] = None
-    approved_by: Optional[str] = None
-    rejected_at: Optional[datetime] = None
-    rejected_by: Optional[str] = None
-    expires_at: Optional[datetime] = None
-    items: List[PlanItemResponse] = []
+    approved_at: datetime | None = None
+    approved_by: str | None = None
+    rejected_at: datetime | None = None
+    rejected_by: str | None = None
+    expires_at: datetime | None = None
+    items: list[PlanItemResponse] = []
 
 
 class PlanApproveRequest(BaseModel):
@@ -116,14 +113,14 @@ class PlanRejectRequest(BaseModel):
     """Plan reject request."""
 
     rejected_by: str
-    reason: Optional[str] = None
+    reason: str | None = None
 
 
 # Execution
 class ExecutionStartRequest(BaseModel):
     """Execution start request."""
 
-    policy: Optional[Dict[str, Any]] = None
+    policy: dict[str, Any] | None = None
 
 
 class ExecutionResponse(BaseModel):
@@ -132,10 +129,10 @@ class ExecutionResponse(BaseModel):
     id: UUID
     plan_id: UUID
     status: ExecutionStatus
-    started_at: Optional[datetime] = None
-    ended_at: Optional[datetime] = None
-    policy: Optional[Dict[str, Any]] = None
-    error: Optional[str] = None
+    started_at: datetime | None = None
+    ended_at: datetime | None = None
+    policy: dict[str, Any] | None = None
+    error: str | None = None
 
 
 # Order
@@ -144,15 +141,15 @@ class OrderResponse(BaseModel):
 
     id: UUID
     plan_id: UUID
-    execution_id: Optional[UUID] = None
+    execution_id: UUID | None = None
     symbol: str
     side: OrderSide
     qty: float
     order_type: str
-    limit_price: Optional[float] = None
+    limit_price: float | None = None
     status: OrderStatus
-    broker_order_id: Optional[str] = None
-    error: Optional[str] = None
+    broker_order_id: str | None = None
+    error: str | None = None
     created_at: datetime
 
 
@@ -161,14 +158,14 @@ class KillSwitchRequest(BaseModel):
     """Kill switch request."""
 
     on: bool = Field(..., alias="on")
-    reason: Optional[str] = None
+    reason: str | None = None
 
 
 class ControlResponse(BaseModel):
     """Control response."""
 
     kill_switch: bool
-    reason: Optional[str] = None
+    reason: str | None = None
     updated_at: datetime
 
 
@@ -179,7 +176,7 @@ class PortfolioSnapshotResponse(BaseModel):
     id: UUID
     asof: datetime
     mode: TradingMode
-    positions: Dict[str, Any]
+    positions: dict[str, Any]
     cash: float
     nav: float
     created_at: datetime
@@ -191,7 +188,7 @@ class DataSnapshotCreate(BaseModel):
 
     source: str
     asof: datetime
-    meta: Optional[Dict[str, Any]] = None
+    meta: dict[str, Any] | None = None
 
 
 class DataSnapshotResponse(BaseModel):
@@ -200,6 +197,5 @@ class DataSnapshotResponse(BaseModel):
     id: UUID
     source: str
     asof: datetime
-    meta: Optional[Dict[str, Any]] = None
+    meta: dict[str, Any] | None = None
     created_at: datetime
-

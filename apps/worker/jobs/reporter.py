@@ -10,4 +10,3 @@ def run():
     logger.info("Reporter job started")
     # TODO: Implement report generation logic
     logger.info("Reporter job completed (stub)")
-

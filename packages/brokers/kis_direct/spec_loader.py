@@ -1,9 +1,8 @@
 """KIS API SSOT CSV loader."""
 
 import csv
-import os
 from pathlib import Path
-from typing import Dict, List, Optional, Any
+from typing import Any
 
 
 class APISpecNotFoundError(Exception):
@@ -17,7 +16,7 @@ class APISpecNotFoundError(Exception):
 class SpecLoader:
     """KIS API spec loader from CSV files."""
 
-    def __init__(self, api_docs_dir: Optional[str] = None):
+    def __init__(self, api_docs_dir: str | None = None):
         """Initialize spec loader."""
         if api_docs_dir is None:
             # Default to api_docs/ in project root
@@ -26,7 +25,7 @@ class SpecLoader:
         self.api_docs_dir = Path(api_docs_dir)
         if not self.api_docs_dir.exists():
             raise FileNotFoundError(f"API docs directory not found: {api_docs_dir}")
-        self._specs: Dict[str, Dict] = {}
+        self._specs: dict[str, dict] = {}
         self._indexed = False
 
     def _load_all_specs(self) -> None:
@@ -62,7 +61,7 @@ class SpecLoader:
 
         self._indexed = True
 
-    def _parse_csv(self, csv_file: Path) -> Optional[Dict[str, Any]]:
+    def _parse_csv(self, csv_file: Path) -> dict[str, Any] | None:
         """Parse a single CSV file into API spec."""
         spec = {
             "api_name": None,
@@ -80,7 +79,7 @@ class SpecLoader:
             "response_body": [],
         }
 
-        with open(csv_file, "r", encoding="utf-8") as f:
+        with open(csv_file, encoding="utf-8") as f:
             reader = csv.reader(f)
             rows = list(reader)
 
@@ -160,36 +159,43 @@ class SpecLoader:
 
         return spec
 
-    def list_available_apis(self) -> List[str]:
+    def list_available_apis(self) -> list[str]:
         """List all available API names/IDs."""
         self._load_all_specs()
         return list(set(self._specs.keys()))
 
-    def get_api(self, name_or_tr_id: str) -> Dict[str, Any]:
+    def get_api(self, name_or_tr_id: str) -> dict[str, Any]:
         """Get API spec by name or TR_ID."""
         self._load_all_specs()
         if name_or_tr_id not in self._specs:
             raise APISpecNotFoundError(name_or_tr_id)
         return self._specs[name_or_tr_id].copy()
 
-    def validate_request(self, api_spec: Dict[str, Any], payload: Dict[str, Any]) -> tuple[bool, List[str]]:
+    def validate_request(
+        self, api_spec: dict[str, Any], payload: dict[str, Any]
+    ) -> tuple[bool, list[str]]:
         """Validate request payload against API spec."""
         errors = []
 
         # Check required headers
         for header_spec in api_spec.get("request_headers", []):
-            if header_spec.get("required") and header_spec.get("element") not in payload.get("headers", {}):
+            if header_spec.get("required") and header_spec.get("element") not in payload.get(
+                "headers", {}
+            ):
                 errors.append(f"Missing required header: {header_spec['element']}")
 
         # Check required query params
         for param_spec in api_spec.get("request_query_params", []):
-            if param_spec.get("required") and param_spec.get("element") not in payload.get("query_params", {}):
+            if param_spec.get("required") and param_spec.get("element") not in payload.get(
+                "query_params", {}
+            ):
                 errors.append(f"Missing required query param: {param_spec['element']}")
 
         # Check required body fields
         for body_spec in api_spec.get("request_body", []):
-            if body_spec.get("required") and body_spec.get("element") not in payload.get("body", {}):
+            if body_spec.get("required") and body_spec.get("element") not in payload.get(
+                "body", {}
+            ):
                 errors.append(f"Missing required body field: {body_spec['element']}")
 
         return len(errors) == 0, errors
-

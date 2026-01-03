@@ -1,19 +1,19 @@
 """Plans router."""
 
+from datetime import datetime
+from uuid import UUID
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
-from uuid import UUID
-from datetime import datetime
-from typing import Optional
 
 from apps.api.main import get_db
-from packages.core.models import RebalancePlan, PlanItem, PlanStatus, Run, RunKind, RunStatus
+from packages.core.models import PlanItem, PlanStatus, RebalancePlan, Run, RunKind, RunStatus
 from packages.core.schemas import (
-    PlanGenerateRequest,
-    PlanResponse,
-    PlanItemResponse,
     PlanApproveRequest,
+    PlanGenerateRequest,
+    PlanItemResponse,
     PlanRejectRequest,
+    PlanResponse,
 )
 
 router = APIRouter()
@@ -61,9 +61,9 @@ async def generate_plan(
 
 @router.get("", response_model=list[PlanResponse])
 async def list_plans(
-    status: Optional[PlanStatus] = Query(None),
-    from_date: Optional[datetime] = Query(None, alias="from"),
-    to_date: Optional[datetime] = Query(None, alias="to"),
+    status: PlanStatus | None = Query(None),
+    from_date: datetime | None = Query(None, alias="from"),
+    to_date: datetime | None = Query(None, alias="to"),
     db: Session = Depends(get_db),
 ):
     """List plans."""
@@ -79,30 +79,35 @@ async def list_plans(
     result = []
     for plan in plans:
         items = db.query(PlanItem).filter(PlanItem.plan_id == plan.id).all()
-        result.append(PlanResponse(
-            id=plan.id,
-            run_id=plan.run_id,
-            config_version_id=plan.config_version_id,
-            data_snapshot_id=plan.data_snapshot_id,
-            status=plan.status,
-            summary=plan.summary,
-            created_at=plan.created_at,
-            approved_at=plan.approved_at,
-            approved_by=plan.approved_by,
-            rejected_at=plan.rejected_at,
-            rejected_by=plan.rejected_by,
-            expires_at=plan.expires_at,
-            items=[PlanItemResponse(
-                id=item.id,
-                symbol=item.symbol,
-                market=item.market,
-                current_weight=float(item.current_weight),
-                target_weight=float(item.target_weight),
-                delta_weight=float(item.delta_weight),
-                reason=item.reason,
-                checks=item.checks,
-            ) for item in items],
-        ))
+        result.append(
+            PlanResponse(
+                id=plan.id,
+                run_id=plan.run_id,
+                config_version_id=plan.config_version_id,
+                data_snapshot_id=plan.data_snapshot_id,
+                status=plan.status,
+                summary=plan.summary,
+                created_at=plan.created_at,
+                approved_at=plan.approved_at,
+                approved_by=plan.approved_by,
+                rejected_at=plan.rejected_at,
+                rejected_by=plan.rejected_by,
+                expires_at=plan.expires_at,
+                items=[
+                    PlanItemResponse(
+                        id=item.id,
+                        symbol=item.symbol,
+                        market=item.market,
+                        current_weight=float(item.current_weight),
+                        target_weight=float(item.target_weight),
+                        delta_weight=float(item.delta_weight),
+                        reason=item.reason,
+                        checks=item.checks,
+                    )
+                    for item in items
+                ],
+            )
+        )
     return result
 
 
@@ -127,16 +132,19 @@ async def get_plan(plan_id: UUID, db: Session = Depends(get_db)):
         rejected_at=plan.rejected_at,
         rejected_by=plan.rejected_by,
         expires_at=plan.expires_at,
-        items=[PlanItemResponse(
-            id=item.id,
-            symbol=item.symbol,
-            market=item.market,
-            current_weight=float(item.current_weight),
-            target_weight=float(item.target_weight),
-            delta_weight=float(item.delta_weight),
-            reason=item.reason,
-            checks=item.checks,
-        ) for item in items],
+        items=[
+            PlanItemResponse(
+                id=item.id,
+                symbol=item.symbol,
+                market=item.market,
+                current_weight=float(item.current_weight),
+                target_weight=float(item.target_weight),
+                delta_weight=float(item.delta_weight),
+                reason=item.reason,
+                checks=item.checks,
+            )
+            for item in items
+        ],
     )
 
 
@@ -151,7 +159,9 @@ async def approve_plan(
     if not plan:
         raise HTTPException(status_code=404, detail="Plan not found")
     if plan.status != PlanStatus.PROPOSED:
-        raise HTTPException(status_code=400, detail=f"Plan is not PROPOSED (current: {plan.status.value})")
+        raise HTTPException(
+            status_code=400, detail=f"Plan is not PROPOSED (current: {plan.status.value})"
+        )
 
     plan.status = PlanStatus.APPROVED
     plan.approved_at = datetime.utcnow()
@@ -191,4 +201,3 @@ async def expire_plan(plan_id: UUID, db: Session = Depends(get_db)):
     db.commit()
 
     return {"status": "expired", "plan_id": str(plan_id)}
-

@@ -1,8 +1,5 @@
 """Strategy: Monthly Dual Momentum (skeleton)."""
 
-from typing import Dict, List, Optional
-from datetime import datetime, timedelta
-
 from packages.core.models import Market
 
 
@@ -29,10 +26,10 @@ class DualMomentumStrategy:
 
     def select_universe(
         self,
-        universe_kr: List[Dict],
-        universe_us: List[Dict],
-        prices: Dict[str, Dict[str, float]],  # {symbol: {current: float, lookback: float}}
-    ) -> List[Dict]:
+        universe_kr: list[dict],
+        universe_us: list[dict],
+        prices: dict[str, dict[str, float]],  # {symbol: {current: float, lookback: float}}
+    ) -> list[dict]:
         """Select top momentum stocks from universe."""
         selected = []
 
@@ -46,11 +43,13 @@ class DualMomentumStrategy:
                 price_data.get("current", 0),
                 price_data.get("lookback", 0),
             )
-            kr_scores.append({
-                "symbol": symbol,
-                "market": Market.KR.value,
-                "score": score,
-            })
+            kr_scores.append(
+                {
+                    "symbol": symbol,
+                    "market": Market.KR.value,
+                    "score": score,
+                }
+            )
 
         # Calculate scores for US
         us_scores = []
@@ -62,18 +61,20 @@ class DualMomentumStrategy:
                 price_data.get("current", 0),
                 price_data.get("lookback", 0),
             )
-            us_scores.append({
-                "symbol": symbol,
-                "market": Market.US.value,
-                "score": score,
-            })
+            us_scores.append(
+                {
+                    "symbol": symbol,
+                    "market": Market.US.value,
+                    "score": score,
+                }
+            )
 
         # Select top N
         kr_scores.sort(key=lambda x: x["score"], reverse=True)
         us_scores.sort(key=lambda x: x["score"], reverse=True)
 
-        selected_kr = kr_scores[:self.kr_top_m]
-        selected_us = us_scores[:self.us_top_n]
+        selected_kr = kr_scores[: self.kr_top_m]
+        selected_us = us_scores[: self.us_top_n]
 
         # Equal weight allocation within each bucket
         kr_weight_per = self.kr_us_split[0] / len(selected_kr) if selected_kr else 0
@@ -91,11 +92,11 @@ class DualMomentumStrategy:
 
     def generate_plan(
         self,
-        current_portfolio: Dict[str, float],  # {symbol: weight}
-        universe_kr: List[str],
-        universe_us: List[str],
-        prices: Dict[str, Dict[str, float]],
-    ) -> List[Dict]:
+        current_portfolio: dict[str, float],  # {symbol: weight}
+        universe_kr: list[str],
+        universe_us: list[str],
+        prices: dict[str, dict[str, float]],
+    ) -> list[dict]:
         """Generate rebalance plan (skeleton)."""
         # This is a skeleton - actual implementation will be in Phase 1 Plan generation
         selected = self.select_universe(universe_kr, universe_us, prices)
@@ -107,14 +108,15 @@ class DualMomentumStrategy:
             target_weight = item["target_weight"]
             delta_weight = target_weight - current_weight
 
-            plan_items.append({
-                "symbol": symbol,
-                "market": item["market"],
-                "current_weight": current_weight,
-                "target_weight": target_weight,
-                "delta_weight": delta_weight,
-                "reason": f"Momentum score: {item['score']:.2%}",
-            })
+            plan_items.append(
+                {
+                    "symbol": symbol,
+                    "market": item["market"],
+                    "current_weight": current_weight,
+                    "target_weight": target_weight,
+                    "delta_weight": delta_weight,
+                    "reason": f"Momentum score: {item['score']:.2%}",
+                }
+            )
 
         return plan_items
-

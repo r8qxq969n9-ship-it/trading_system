@@ -1,9 +1,9 @@
 """KIS MCP adapter (skeleton)."""
 
 import logging
-from typing import Dict, List, Optional, Any
+from typing import Any
 
-from packages.core.interfaces import IBroker, Order, Balance, Quote
+from packages.core.interfaces import Balance, IBroker, Order, Quote
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +26,7 @@ class KISMCPAdapter(IBroker):
         # TODO: Implement MCP token refresh
         return "stub_mcp_token_refreshed"
 
-    def get_quotes(self, symbols: List[str]) -> List[Quote]:
+    def get_quotes(self, symbols: list[str]) -> list[Quote]:
         """Get quotes for symbols (stub)."""
         # TODO: Implement MCP quote retrieval
         logger.warning("get_quotes is not yet implemented (MCP), returning stub data")
@@ -38,7 +38,7 @@ class KISMCPAdapter(IBroker):
         logger.warning("get_balance is not yet implemented (MCP), returning stub data")
         return Balance(cash=1000000.0, positions={})
 
-    def place_order(self, order: Order) -> Dict[str, Any]:
+    def place_order(self, order: Order) -> dict[str, Any]:
         """Place order (stub)."""
         # TODO: Implement MCP order placement
         # Note: Same LiveTradingDisabledError check should be applied by caller
@@ -48,21 +48,20 @@ class KISMCPAdapter(IBroker):
             "status": "SENT",
         }
 
-    def get_orders(self, status: Optional[str] = None) -> List[Dict[str, Any]]:
+    def get_orders(self, status: str | None = None) -> list[dict[str, Any]]:
         """Get orders (stub)."""
         # TODO: Implement MCP order retrieval
         logger.warning("get_orders is not yet implemented (MCP), returning stub data")
         return []
 
-    def get_fills(self, order_id: Optional[str] = None) -> List[Dict[str, Any]]:
+    def get_fills(self, order_id: str | None = None) -> list[dict[str, Any]]:
         """Get fills (stub)."""
         # TODO: Implement MCP fill retrieval
         logger.warning("get_fills is not yet implemented (MCP), returning stub data")
         return []
 
-    def cancel_order(self, order_id: str) -> Dict[str, Any]:
+    def cancel_order(self, order_id: str) -> dict[str, Any]:
         """Cancel order (stub)."""
         # TODO: Implement MCP order cancellation
         logger.warning("cancel_order is not yet implemented (MCP stub)")
         return {"status": "CANCELED"}
-

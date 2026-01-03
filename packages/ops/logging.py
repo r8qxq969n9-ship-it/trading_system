@@ -4,7 +4,7 @@ import json
 import logging
 import sys
 from datetime import datetime
-from typing import Any, Dict
+from typing import Any
 
 
 class JSONFormatter(logging.Formatter):
@@ -12,7 +12,7 @@ class JSONFormatter(logging.Formatter):
 
     def format(self, record: logging.LogRecord) -> str:
         """Format log record as JSON."""
-        log_data: Dict[str, Any] = {
+        log_data: dict[str, Any] = {
             "timestamp": datetime.utcnow().isoformat() + "Z",
             "level": record.levelname,
             "logger": record.name,
@@ -43,4 +43,3 @@ def setup_logging(level: str = "INFO") -> None:
     root_logger = logging.getLogger()
     root_logger.setLevel(getattr(logging, level.upper()))
     root_logger.addHandler(handler)
-

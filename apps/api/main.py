@@ -1,13 +1,15 @@
 """FastAPI main application."""
 
 import uuid
+from collections.abc import Callable
 from contextlib import asynccontextmanager
-from typing import Callable
 
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 
+# Import routers
+from apps.api.routers import configs, controls, data, executions, health, plans, portfolio
 from packages.core.database import get_session_factory
 from packages.ops.logging import setup_logging
 
@@ -71,9 +73,6 @@ def get_db() -> Session:
         db.close()
 
 
-# Import routers
-from apps.api.routers import health, controls, configs, plans, executions, portfolio, data
-
 app.include_router(health.router, prefix="/health", tags=["health"])
 app.include_router(controls.router, prefix="/controls", tags=["controls"])
 app.include_router(configs.router, prefix="/configs", tags=["configs"])
@@ -87,4 +86,3 @@ if __name__ == "__main__":
     import uvicorn
 
     uvicorn.run(app, host="0.0.0.0", port=8000)
-
