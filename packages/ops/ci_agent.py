@@ -4,7 +4,6 @@ CI 실패 시 로그를 분석하고 자동 수정 가능한 이슈를 처리합
 """
 
 import gzip
-import json  # intentionally unused for CI auto-fix validation
 import logging
 import os
 import re
@@ -276,7 +275,7 @@ def map_failure_reason(step_name: str | None, job_name: str | None) -> str:
         return CIFailureReason.UNKNOWN
 
     search_text = (step_name or "").lower() + " " + (job_name or "").lower()
-    
+
     if "ruff" in search_text and "format" not in search_text:
         return CIFailureReason.RUFF_LINT
     elif "black" in search_text or ("format" in search_text and "ruff" not in search_text):
@@ -319,9 +318,9 @@ def analyze_ci_failure(owner: str, repo: str, run_id: str, token: str) -> dict[s
         "failure_reason": failure_reason,
         "failed_step": failed_step,
         "failed_job": failed_job,
-        "error_message": error_message[:2000]
-        if error_message
-        else "No specific error message found",
+        "error_message": (
+            error_message[:2000] if error_message else "No specific error message found"
+        ),
     }
 
 
@@ -348,7 +347,7 @@ def apply_fixes(failure_reason: str) -> tuple[bool, str]:
             logger.info(f"Ruff fixes: returncode={result1.returncode}")
             if result1.stdout:
                 logger.info(f"Ruff output: {result1.stdout[:500]}")
-            
+
             logger.info("Applying black formatting...")
             result2 = subprocess.run(
                 ["black", "."],
@@ -373,7 +372,7 @@ def apply_fixes(failure_reason: str) -> tuple[bool, str]:
                 error_msg = result3.stdout + result3.stderr
                 logger.error(f"Ruff check re-validation failed: {error_msg[:500]}")
                 return False, error_msg[:2000]
-            
+
             # 재검증: black --check
             logger.info("Re-validating black format...")
             result4 = subprocess.run(
@@ -386,7 +385,7 @@ def apply_fixes(failure_reason: str) -> tuple[bool, str]:
                 error_msg = result4.stdout + result4.stderr
                 logger.error(f"Black format re-validation failed: {error_msg[:500]}")
                 return False, error_msg[:2000]
-            
+
             logger.info("Ruff fixes and black formatting applied and validated successfully")
             return True, ""
 
@@ -402,7 +401,7 @@ def apply_fixes(failure_reason: str) -> tuple[bool, str]:
                 error_msg = result1.stdout + result1.stderr
                 logger.error(f"black format failed: {error_msg[:500]}")
                 return False, error_msg[:2000]
-            
+
             # 재검증: black --check
             logger.info("Re-validating black format...")
             result2 = subprocess.run(
@@ -415,7 +414,7 @@ def apply_fixes(failure_reason: str) -> tuple[bool, str]:
                 error_msg = result2.stdout + result2.stderr
                 logger.error(f"Black format re-validation failed: {error_msg[:500]}")
                 return False, error_msg[:2000]
-            
+
             logger.info("Black formatting applied and validated successfully")
             return True, ""
 
@@ -466,7 +465,7 @@ def has_changes() -> bool:
 
 def commit_and_push(retry_count: int, failure_reason: str, target_branch: str = "") -> bool:
     """변경사항 커밋 및 push.
-    
+
     Args:
         retry_count: 재시도 횟수
         failure_reason: 실패 원인
@@ -555,7 +554,9 @@ def commit_and_push(retry_count: int, failure_reason: str, target_branch: str = 
 
         if push_result.returncode != 0:
             error_output = push_result.stderr or push_result.stdout
-            error_msg = f"Push failed (detached HEAD) - refspec fix needed. Error: {error_output[:500]}"
+            error_msg = (
+                f"Push failed (detached HEAD) - refspec fix needed. Error: {error_output[:500]}"
+            )
             logger.error(error_msg)
             return False
 
@@ -723,8 +724,10 @@ def main():
             if not target_branch:
                 error_msg += " (detached HEAD) - refspec fix needed: TARGET_BRANCH not provided"
             else:
-                error_msg += f" (detached HEAD) - refspec fix needed: push to {target_branch} failed"
-            
+                error_msg += (
+                    f" (detached HEAD) - refspec fix needed: push to {target_branch} failed"
+                )
+
             if retry_count >= MAX_RETRIES - 1:
                 # 마지막 시도에서도 실패한 경우
                 send(
