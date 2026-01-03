@@ -1,6 +1,7 @@
 """KIS API SSOT CSV loader."""
 
 import csv
+import os
 from pathlib import Path
 from typing import Any
 
@@ -19,9 +20,14 @@ class SpecLoader:
     def __init__(self, api_docs_dir: str | None = None):
         """Initialize spec loader."""
         if api_docs_dir is None:
-            # Default to api_docs/ in project root
-            project_root = Path(__file__).parent.parent.parent.parent.parent
-            api_docs_dir = str(project_root / "api_docs")
+            # Check environment variable first
+            api_docs_dir = os.getenv("API_DOCS_DIR")
+            if api_docs_dir is None:
+                # Default to api_docs/ in project root
+                # spec_loader.py is at: packages/brokers/kis_direct/spec_loader.py
+                # Go up 4 levels to reach project root
+                project_root = Path(__file__).resolve().parents[3]
+                api_docs_dir = str(project_root / "api_docs")
         self.api_docs_dir = Path(api_docs_dir)
         if not self.api_docs_dir.exists():
             raise FileNotFoundError(f"API docs directory not found: {api_docs_dir}")

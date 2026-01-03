@@ -16,12 +16,16 @@ from sqlalchemy import (
 from sqlalchemy import (
     Enum as SQLEnum,
 )
+from sqlalchemy import JSON as sa_JSON
+from sqlalchemy.dialects import postgresql
 from sqlalchemy.dialects.postgresql import JSONB, TIMESTAMP
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import declarative_base, relationship
 
 Base = declarative_base()
+
+# JSON type that works with both PostgreSQL (JSONB) and SQLite (JSON)
+JSON_TYPE = sa_JSON().with_variant(postgresql.JSONB, "postgresql")
 
 
 # Enums
@@ -113,8 +117,8 @@ class ConfigVersion(Base):
     id = Column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
     mode = Column(SQLEnum(TradingMode), nullable=False)
     strategy_name = Column(Text, nullable=False)
-    strategy_params = Column(JSONB, nullable=False)
-    constraints = Column(JSONB, nullable=False)
+    strategy_params = Column(JSON_TYPE, nullable=False)
+    constraints = Column(JSON_TYPE, nullable=False)
     created_at = Column(TIMESTAMP(timezone=True), nullable=False, server_default=func.now())
     created_by = Column(Text, nullable=False)
 
@@ -127,7 +131,7 @@ class DataSnapshot(Base):
     id = Column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
     source = Column(Text, nullable=False)
     asof = Column(TIMESTAMP(timezone=True), nullable=False)
-    meta = Column(JSONB, nullable=True)
+    meta = Column(JSON_TYPE, nullable=True)
     created_at = Column(TIMESTAMP(timezone=True), nullable=False, server_default=func.now())
 
 
@@ -139,7 +143,7 @@ class PortfolioSnapshot(Base):
     id = Column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
     asof = Column(TIMESTAMP(timezone=True), nullable=False)
     mode = Column(SQLEnum(TradingMode), nullable=False)
-    positions = Column(JSONB, nullable=False)
+    positions = Column(JSON_TYPE, nullable=False)
     cash = Column(Numeric, nullable=False)
     nav = Column(Numeric, nullable=False)
     created_at = Column(TIMESTAMP(timezone=True), nullable=False, server_default=func.now())
@@ -155,7 +159,7 @@ class Run(Base):
     status = Column(SQLEnum(RunStatus), nullable=False)
     started_at = Column(TIMESTAMP(timezone=True), nullable=False, server_default=func.now())
     ended_at = Column(TIMESTAMP(timezone=True), nullable=True)
-    meta = Column(JSONB, nullable=True)
+    meta = Column(JSON_TYPE, nullable=True)
     error = Column(Text, nullable=True)
 
 
@@ -171,7 +175,7 @@ class RebalancePlan(Base):
     )
     data_snapshot_id = Column(PGUUID(as_uuid=True), ForeignKey("data_snapshots.id"), nullable=False)
     status = Column(SQLEnum(PlanStatus), nullable=False, default=PlanStatus.PROPOSED)
-    summary = Column(JSONB, nullable=False)
+    summary = Column(JSON_TYPE, nullable=False)
     created_at = Column(TIMESTAMP(timezone=True), nullable=False, server_default=func.now())
     approved_at = Column(TIMESTAMP(timezone=True), nullable=True)
     approved_by = Column(Text, nullable=True)
@@ -199,7 +203,7 @@ class PlanItem(Base):
     target_weight = Column(Numeric, nullable=False)
     delta_weight = Column(Numeric, nullable=False)
     reason = Column(Text, nullable=True)
-    checks = Column(JSONB, nullable=True)
+    checks = Column(JSON_TYPE, nullable=True)
 
     # Relationships
     plan = relationship("RebalancePlan", back_populates="items")
@@ -217,7 +221,7 @@ class Execution(Base):
     status = Column(SQLEnum(ExecutionStatus), nullable=False, default=ExecutionStatus.PENDING)
     started_at = Column(TIMESTAMP(timezone=True), nullable=True)
     ended_at = Column(TIMESTAMP(timezone=True), nullable=True)
-    policy = Column(JSONB, nullable=True)
+    policy = Column(JSON_TYPE, nullable=True)
     error = Column(Text, nullable=True)
 
     # Relationships
@@ -260,7 +264,7 @@ class Fill(Base):
     filled_qty = Column(Numeric, nullable=False)
     filled_price = Column(Numeric, nullable=False)
     filled_at = Column(TIMESTAMP(timezone=True), nullable=False)
-    raw = Column(JSONB, nullable=True)
+    raw = Column(JSON_TYPE, nullable=True)
 
     # Relationships
     order = relationship("Order", back_populates="fills")
@@ -276,7 +280,7 @@ class AuditEvent(Base):
     actor = Column(Text, nullable=False)
     ref_type = Column(Text, nullable=True)
     ref_id = Column(PGUUID(as_uuid=True), nullable=True)
-    payload = Column(JSONB, nullable=True)
+    payload = Column(JSON_TYPE, nullable=True)
     created_at = Column(TIMESTAMP(timezone=True), nullable=False, server_default=func.now())
 
 
@@ -289,7 +293,7 @@ class AlertSent(Base):
     level = Column(SQLEnum(AlertLevel), nullable=False)
     channel = Column(Text, nullable=False)
     title = Column(Text, nullable=False)
-    body = Column(JSONB, nullable=False)
+    body = Column(JSON_TYPE, nullable=False)
     sent_at = Column(TIMESTAMP(timezone=True), nullable=False, server_default=func.now())
 
 

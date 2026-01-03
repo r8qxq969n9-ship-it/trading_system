@@ -1,0 +1,22 @@
+테스트 API,,,,,,
+API 통신방식,REST,,,,,
+메뉴 위치,테스트,,,,,
+API 명,테스트 API,,,,,
+API ID,TEST-001,,,,,
+실전 TR_ID,TEST001R,,,,,
+모의 TR_ID,TEST001P,,,,,
+기본정보,,,,,,
+HTTP Method,GET,,,,,
+실전 Domain,https://test.example.com,,,,,
+모의 Domain,https://test-paper.example.com,,,,,
+URL 명,/test/api,,,,,
+개요,,,,,,
+개요,테스트용 API입니다.,,,,,
+Layout,,,,,,
+구분,Element,한글명,Type,Required,Length,Description
+Request Header,content-type,컨텐츠타입,string,Y,40,application/json
+,authorization,접근토큰,string,Y,350,Access token
+Response Body,rt_cd,응답코드,string,Y,2,00: 정상
+,msg_cd,메시지코드,string,Y,8,응답코드
+,msg1,메시지,string,Y,100,응답메시지
+
