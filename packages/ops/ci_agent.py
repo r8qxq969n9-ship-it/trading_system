@@ -316,22 +316,62 @@ def can_auto_fix(failure_reason: str) -> bool:
     return failure_reason in [CIFailureReason.RUFF_LINT, CIFailureReason.BLACK_FORMAT]
 
 
-def apply_fixes(failure_reason: str) -> bool:
-    """자동 수정 적용."""
+def apply_fixes(failure_reason: str) -> tuple[bool, str]:
+    """자동 수정 적용 및 재검증.
+    
+    Returns:
+        (success: bool, error_message: str)
+    """
     try:
         if failure_reason == CIFailureReason.RUFF_LINT:
-            logger.info("Applying ruff fixes...")
-            result = subprocess.run(
+            logger.info("Applying ruff fixes (safe fixes)...")
+            result1 = subprocess.run(
                 ["ruff", "check", ".", "--fix"],
                 capture_output=True,
                 text=True,
                 timeout=60,
             )
-            if result.returncode != 0:
-                logger.error(f"ruff fix failed: {result.stderr}")
-                return False
-            logger.info("Ruff fixes applied successfully")
-            return True
+            logger.info(f"Ruff safe fixes: returncode={result1.returncode}")
+            if result1.stdout:
+                logger.info(f"Ruff output: {result1.stdout[:500]}")
+            
+            logger.info("Applying ruff fixes (unsafe fixes)...")
+            result2 = subprocess.run(
+                ["ruff", "check", ".", "--fix", "--unsafe-fixes"],
+                capture_output=True,
+                text=True,
+                timeout=60,
+            )
+            logger.info(f"Ruff unsafe fixes: returncode={result2.returncode}")
+            if result2.stdout:
+                logger.info(f"Ruff output: {result2.stdout[:500]}")
+            
+            logger.info("Applying black formatting...")
+            result3 = subprocess.run(
+                ["black", "."],
+                capture_output=True,
+                text=True,
+                timeout=60,
+            )
+            if result3.returncode != 0:
+                logger.error(f"black format failed: {result3.stderr}")
+                return False, f"black format failed: {result3.stderr[:500]}"
+            
+            # 재검증: ruff check (수정 후 검증)
+            logger.info("Re-validating ruff check...")
+            result4 = subprocess.run(
+                ["ruff", "check", "."],
+                capture_output=True,
+                text=True,
+                timeout=60,
+            )
+            if result4.returncode != 0:
+                error_msg = result4.stdout + result4.stderr
+                logger.error(f"Ruff re-validation failed: {error_msg[:500]}")
+                return False, error_msg[:2000]
+            
+            logger.info("Ruff fixes applied and validated successfully")
+            return True, ""
 
         elif failure_reason == CIFailureReason.BLACK_FORMAT:
             logger.info("Applying black formatting...")
@@ -343,30 +383,61 @@ def apply_fixes(failure_reason: str) -> bool:
             )
             if result.returncode != 0:
                 logger.error(f"black format failed: {result.stderr}")
-                return False
+                return False, f"black format failed: {result.stderr[:500]}"
+            
             logger.info("Black formatting applied successfully")
-            return True
+            return True, ""
 
-        return False
+        return False, "Unknown failure reason"
     except subprocess.TimeoutExpired:
         logger.error("Fix command timed out")
-        return False
+        return False, "Fix command timed out"
     except Exception as e:
         logger.error(f"Failed to apply fixes: {e}")
-        return False
+        return False, str(e)
 
 
-def commit_and_push(retry_count: int, failure_reason: str) -> bool:
-    """변경사항 커밋 및 push."""
+def has_changes() -> bool:
+    """변경사항이 있는지 확인 (git diff 사용)."""
     try:
-        # 변경사항 확인
+        # 변경된 파일 확인
+        result = subprocess.run(
+            ["git", "diff", "--name-only", "HEAD"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        if result.stdout.strip():
+            return True
+        
+        # Staged 파일 확인
+        result = subprocess.run(
+            ["git", "diff", "--cached", "--name-only"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        if result.stdout.strip():
+            return True
+        
+        # Untracked 파일 확인
         result = subprocess.run(
             ["git", "status", "--porcelain"],
             capture_output=True,
             text=True,
             timeout=10,
         )
-        if not result.stdout.strip():
+        return bool(result.stdout.strip())
+    except Exception as e:
+        logger.error(f"Failed to check changes: {e}")
+        return False
+
+
+def commit_and_push(retry_count: int, failure_reason: str) -> bool:
+    """변경사항 커밋 및 push."""
+    try:
+        # 변경사항 확인 (git diff 사용)
+        if not has_changes():
             logger.info("No changes to commit")
             return False
 
@@ -385,13 +456,13 @@ def commit_and_push(retry_count: int, failure_reason: str) -> bool:
         # 변경사항 추가
         subprocess.run(["git", "add", "."], check=True, timeout=10)
 
-        # 커밋 메시지 생성
+        # 커밋 메시지 생성 ([skip ci] 금지)
         if failure_reason == CIFailureReason.RUFF_LINT:
-            commit_msg = f"[CI Auto-Fix] Fix linting errors (retry {retry_count + 1})"
+            commit_msg = f"ci-fix: ruff auto-fix (attempt {retry_count + 1}/{MAX_RETRIES})"
         elif failure_reason == CIFailureReason.BLACK_FORMAT:
-            commit_msg = f"[CI Auto-Fix] Fix formatting errors (retry {retry_count + 1})"
+            commit_msg = f"ci-fix: black auto-fix (attempt {retry_count + 1}/{MAX_RETRIES})"
         else:
-            commit_msg = f"[CI Auto-Fix] Fix CI errors (retry {retry_count + 1})"
+            commit_msg = f"ci-fix: auto-fix (attempt {retry_count + 1}/{MAX_RETRIES})"
 
         # 커밋
         subprocess.run(
@@ -508,28 +579,71 @@ def main():
             )
             sys.exit(1)
 
-        # 자동 수정 적용
+        # 자동 수정 적용 및 재검증
         logger.info("Applying automatic fixes...")
-        if not apply_fixes(failure_reason):
-            logger.error("Failed to apply fixes")
+        fix_success, fix_error = apply_fixes(failure_reason)
+        if not fix_success:
+            logger.error(f"Failed to apply fixes: {fix_error}")
+            # 재검증 실패 시 DECISION_REQUIRED
+            error_snippet = fix_error[-2000:] if len(fix_error) > 2000 else fix_error
+            send(
+                AlertLevel.DECISION_REQUIRED,
+                "decisions",
+                "CI Auto-Fix: Re-validation Failed",
+                {
+                    "run_url": run_url,
+                    "target_sha7": target_sha[:7] if target_sha else "unknown",
+                    "target_branch": target_branch,
+                    "failed_job": failed_job or "unknown",
+                    "failed_step": failed_step or "unknown",
+                    "failure_reason": failure_reason,
+                    "error_snippet": error_snippet,
+                    "retry_count": retry_count,
+                    "message": "Auto-fix applied but re-validation failed. Manual intervention required.",
+                },
+            )
+            sys.exit(1)
+
+        # 변경사항 확인 (git diff)
+        if not has_changes():
+            logger.warning("No changes after applying fixes")
+            # 변경이 없는데도 ruff가 실패하면 DECISION_REQUIRED (루프 방지)
+            error_snippet = error_message[-2000:] if len(error_message) > 2000 else error_message
+            send(
+                AlertLevel.DECISION_REQUIRED,
+                "decisions",
+                "CI Auto-Fix: No Changes After Fix",
+                {
+                    "run_url": run_url,
+                    "target_sha7": target_sha[:7] if target_sha else "unknown",
+                    "target_branch": target_branch,
+                    "failed_job": failed_job or "unknown",
+                    "failed_step": failed_step or "unknown",
+                    "failure_reason": failure_reason,
+                    "error_snippet": error_snippet,
+                    "retry_count": retry_count,
+                    "message": "Auto-fix applied but no changes detected. This may indicate a non-auto-fixable issue.",
+                },
+            )
             sys.exit(1)
 
         # 커밋 및 push
         logger.info("Committing and pushing changes...")
         if not commit_and_push(retry_count, failure_reason):
-            logger.warning("No changes to commit or push failed")
-            # 변경사항이 없거나 push 실패한 경우
+            logger.warning("Push failed")
+            # Push 실패한 경우
             if retry_count >= MAX_RETRIES - 1:
                 # 마지막 시도에서도 실패한 경우
                 send(
                     AlertLevel.ERROR,
                     "dev",
-                    "CI Auto-Fix: No Changes or Push Failed",
+                    "CI Auto-Fix: Push Failed",
                     {
                         "run_url": run_url,
+                        "target_sha7": target_sha[:7] if target_sha else "unknown",
                         "failure_reason": failure_reason,
                         "retry_count": retry_count + 1,
-                        "message": "Auto-fix applied but no changes to commit or push failed",
+                        "message": "Auto-fix applied but push failed",
                     },
                 )
             sys.exit(1)
