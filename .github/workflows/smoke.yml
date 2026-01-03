@@ -1,0 +1,87 @@
+name: Smoke Test
+
+on:
+  workflow_dispatch:  # Manual trigger only
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: trading_system
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install Poetry
+        uses: snok/install-poetry@v1
+        with:
+          version: latest
+          virtualenvs-create: true
+          virtualenvs-in-project: true
+
+      - name: Install dependencies
+        run: poetry install --no-interaction --no-root
+
+      - name: Wait for PostgreSQL
+        run: |
+          until pg_isready -h localhost -p 5432 -U postgres; do
+            echo "Waiting for PostgreSQL..."
+            sleep 2
+          done
+
+      - name: Run migrations
+        env:
+          DB_HOST: localhost
+          DB_USER: postgres
+          DB_PASSWORD: postgres
+          DB_NAME: trading_system
+          DB_PORT: 5432
+        run: poetry run python -m alembic upgrade head
+
+      - name: Run smoke test
+        env:
+          DB_HOST: localhost
+          DB_USER: postgres
+          DB_PASSWORD: postgres
+          DB_NAME: trading_system
+          DB_PORT: 5432
+          USE_STUB_PRICES: "true"
+          STUB_PRICE_SEED: "42"
+          CI: "true"
+          GITHUB_ACTIONS: "true"
+          SLACK_WEBHOOK_DEV: ${{ secrets.SLACK_WEBHOOK_DEV }}
+        run: |
+          poetry run make smoke || SMOKE_EXIT_CODE=$?
+          SMOKE_EXIT_CODE=${SMOKE_EXIT_CODE:-0}
+          if [ $SMOKE_EXIT_CODE -ne 0 ]; then
+            echo "Smoke test failed with exit code $SMOKE_EXIT_CODE"
+            exit $SMOKE_EXIT_CODE
+          fi
+
+      - name: Upload smoke log
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: smoke-log
+          path: artifacts/smoke.log
+          retention-days: 7
+

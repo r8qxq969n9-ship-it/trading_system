@@ -1,5 +1,6 @@
 """Plans router."""
 
+import os
 import random
 from datetime import datetime, timedelta
 from uuid import UUID
@@ -76,31 +77,46 @@ async def generate_plan(
         # For stub, assume price = 100 (will be replaced by actual quotes)
         current_portfolio[symbol] = float(qty) * 100.0 / nav if nav > 0 else 0.0
 
-    # 4. Get price data (stub)
+    # 4. Get price data (use StubPriceProvider if enabled)
     broker = get_broker()
     all_symbols = universe_kr + universe_us
     quotes = broker.get_quotes(all_symbols)
 
     # Build prices dict: {symbol: {current: float, lookback: float}}
     prices = {}
-    for quote in quotes:
-        current_price = quote.price
-        # Lookback price: current * (0.9 ~ 1.1) random
-        lookback_price = current_price * random.uniform(0.9, 1.1)
-        prices[quote.symbol] = {
-            "current": current_price,
-            "lookback": lookback_price,
-        }
+    use_stub_prices = os.getenv("USE_STUB_PRICES", "false").lower() == "true"
+    lookback_months = strategy_params.get("lookback_months", 3)
+    
+    if use_stub_prices:
+        # Use StubPriceProvider for deterministic lookback prices
+        from packages.data.stub_price_provider import StubPriceProvider
+        stub_provider = StubPriceProvider()
+        for quote in quotes:
+            current_price = quote.price
+            lookback_price = stub_provider.get_lookback_price(quote.symbol, lookback_months)
+            prices[quote.symbol] = {
+                "current": current_price,
+                "lookback": lookback_price,
+            }
+    else:
+        # Fallback to random lookback (for backward compatibility)
+        for quote in quotes:
+            current_price = quote.price
+            lookback_price = current_price * random.uniform(0.9, 1.1)
+            prices[quote.symbol] = {
+                "current": current_price,
+                "lookback": lookback_price,
+            }
 
     # 5. Run strategy
     strategy = DualMomentumStrategy(
-        lookback_months=strategy_params.get("lookback_months", 3),
+        lookback_months=lookback_months,
         us_top_n=strategy_params.get("us_top_n", 4),
         kr_top_m=strategy_params.get("kr_top_m", 2),
         kr_us_split=tuple(strategy_params.get("kr_us_split", [0.4, 0.6])),
     )
 
-    plan_items_dict = strategy.generate_plan(
+    plan_items_dict, strategy_summary = strategy.generate_plan(
         current_portfolio=current_portfolio,
         universe_kr=universe_kr,
         universe_us=universe_us,
@@ -171,6 +187,7 @@ async def generate_plan(
             "passed": passed,
             "errors": errors if not passed else [],
         },
+        **strategy_summary,  # Include strategy summary (strategy, kr_selected, us_selected, lookback_months)
     }
 
     # 9. Create Plan

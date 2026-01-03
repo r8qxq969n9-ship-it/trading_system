@@ -1,4 +1,4 @@
-.PHONY: help db-up db-down migrate run-api run-ui run-worker test lint format
+.PHONY: help db-up db-down migrate run-api run-ui run-worker test lint format smoke
 
 help:
 	@echo "Available commands:"
@@ -11,6 +11,7 @@ help:
 	@echo "  make test        - Run tests"
 	@echo "  make lint        - Run linter"
 	@echo "  make format      - Format code"
+	@echo "  make smoke       - Run smoke test (db-up → migrate → smoke)"
 
 db-up:
 	docker-compose up -d postgres
@@ -40,4 +41,9 @@ lint:
 format:
 	ruff check . --fix
 	black .
+
+smoke: db-up migrate
+	@echo "Running smoke test..."
+	@mkdir -p artifacts
+	@python scripts/smoke.py 2>&1 | tee artifacts/smoke.log || (echo "Smoke test failed" && exit 1)
 

@@ -6,6 +6,7 @@ from typing import Any
 
 from packages.brokers.kis_direct.spec_loader import SpecLoader
 from packages.core.interfaces import Balance, IBroker, Order, Quote
+from packages.data.stub_price_provider import StubPriceProvider
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +28,11 @@ class KISDirectAdapter(IBroker):
         self.spec_loader = SpecLoader(api_docs_dir)
         self._token: str | None = None
         self._token_expires_at: float | None = None
+        # Initialize stub price provider if enabled
+        use_stub_prices = os.getenv("USE_STUB_PRICES", "false").lower() == "true"
+        self._stub_provider = StubPriceProvider() if use_stub_prices else None
+        if use_stub_prices:
+            logger.info("StubPriceProvider enabled for deterministic pricing")
 
     def get_token(self) -> str:
         """Get access token (stub)."""
@@ -48,7 +54,21 @@ class KISDirectAdapter(IBroker):
         return self._token
 
     def get_quotes(self, symbols: list[str]) -> list[Quote]:
-        """Get quotes for symbols (stub)."""
+        """Get quotes for symbols."""
+        # Use StubPriceProvider if enabled
+        if self._stub_provider:
+            quotes = []
+            for symbol in symbols:
+                # Determine market based on symbol format
+                # KR: 6-digit numeric, US: 1-5 letter ticker
+                if symbol.isdigit() and len(symbol) == 6:
+                    market = "KR"
+                else:
+                    market = "US"
+                price = self._stub_provider.get_current_price(symbol)
+                quotes.append(Quote(symbol=symbol, price=price, market=market))
+            return quotes
+        
         # TODO: Implement using spec_loader to find appropriate API and call it
         # For now, return stub data
         logger.warning("get_quotes is not yet implemented, returning stub data")

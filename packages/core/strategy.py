@@ -76,6 +76,14 @@ class DualMomentumStrategy:
         selected_kr = kr_scores[: self.kr_top_m]
         selected_us = us_scores[: self.us_top_n]
 
+        # Add rank information
+        for idx, item in enumerate(selected_kr):
+            item["rank"] = idx + 1
+            item["total"] = len(kr_scores)
+        for idx, item in enumerate(selected_us):
+            item["rank"] = idx + 1
+            item["total"] = len(us_scores)
+
         # Equal weight allocation within each bucket
         kr_weight_per = self.kr_us_split[0] / len(selected_kr) if selected_kr else 0
         us_weight_per = self.kr_us_split[1] / len(selected_us) if selected_us else 0
@@ -96,17 +104,28 @@ class DualMomentumStrategy:
         universe_kr: list[str],
         universe_us: list[str],
         prices: dict[str, dict[str, float]],
-    ) -> list[dict]:
-        """Generate rebalance plan (skeleton)."""
-        # This is a skeleton - actual implementation will be in Phase 1 Plan generation
+    ) -> tuple[list[dict], dict]:
+        """Generate rebalance plan.
+
+        Returns:
+            Tuple of (plan_items, summary_dict)
+        """
         selected = self.select_universe(universe_kr, universe_us, prices)
 
         plan_items = []
+        kr_selected = 0
+        us_selected = 0
+        
         for item in selected:
             symbol = item["symbol"]
             current_weight = current_portfolio.get(symbol, 0.0)
             target_weight = item["target_weight"]
             delta_weight = target_weight - current_weight
+            
+            if item["market"] == Market.KR.value:
+                kr_selected += 1
+            else:
+                us_selected += 1
 
             plan_items.append(
                 {
@@ -115,8 +134,15 @@ class DualMomentumStrategy:
                     "current_weight": current_weight,
                     "target_weight": target_weight,
                     "delta_weight": delta_weight,
-                    "reason": f"Momentum score: {item['score']:.2%}",
+                    "reason": f"Momentum score: {item['score']:.2%}, rank: {item.get('rank', 'N/A')}/{item.get('total', 'N/A')}",
                 }
             )
 
-        return plan_items
+        summary = {
+            "strategy": "dual_momentum",
+            "kr_selected": kr_selected,
+            "us_selected": us_selected,
+            "lookback_months": self.lookback_months,
+        }
+
+        return plan_items, summary

@@ -29,9 +29,15 @@ def send(
         webhook_url = os.getenv("SLACK_WEBHOOK_DECISIONS")
 
     if not webhook_url:
-        logger.info(
-            f"Slack webhook not configured for channel '{channel}', skipping notification: {title}"
-        )
+        # Local smoke: print message instead of logging (for visibility)
+        # CI: will have webhook set, so this won't be reached
+        is_ci = os.getenv("CI", "").lower() == "true" or os.getenv("GITHUB_ACTIONS") == "true"
+        if not is_ci:
+            print(f"SLACK_WEBHOOK_{channel.upper()} not set, skip: {title}")
+        else:
+            logger.info(
+                f"Slack webhook not configured for channel '{channel}', skipping notification: {title}"
+            )
         return False
 
     # Format message

@@ -170,6 +170,16 @@ class ControlResponse(BaseModel):
 
 
 # Portfolio
+class PortfolioSnapshotCreate(BaseModel):
+    """Portfolio snapshot create request."""
+
+    asof: datetime
+    mode: TradingMode
+    positions: dict[str, Any]
+    cash: float
+    nav: float
+
+
 class PortfolioSnapshotResponse(BaseModel):
     """Portfolio snapshot response."""
 

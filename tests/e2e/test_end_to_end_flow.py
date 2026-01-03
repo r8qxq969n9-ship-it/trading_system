@@ -1,5 +1,6 @@
 """E2E test: full flow from plan generation to execution completion."""
 
+import os
 from datetime import datetime
 from decimal import Decimal
 
@@ -11,6 +12,7 @@ from packages.core.models import (
     Execution,
     ExecutionStatus,
     Fill,
+    Market,
     Order,
     OrderStatus,
     PlanItem,
@@ -25,8 +27,12 @@ from packages.core.models import (
 
 
 @pytest.fixture
-def setup_test_data(db_session):
+def setup_test_data(db_session, monkeypatch):
     """Setup test data: config version, data snapshot, portfolio snapshot."""
+    # Enable stub prices for deterministic testing
+    monkeypatch.setenv("USE_STUB_PRICES", "true")
+    monkeypatch.setenv("STUB_PRICE_SEED", "42")
+    
     # Create config version
     config_version = ConfigVersion(
         mode=TradingMode.PAPER,
@@ -97,6 +103,46 @@ async def test_end_to_end_flow(db_session, setup_test_data):
     assert len(plan_response.items) > 0
     assert "summary" in plan_response.summary
     assert "kr_us_summary" in plan_response.summary
+    
+    # Verify strategy summary
+    summary = plan_response.summary
+    assert "strategy" in summary
+    assert summary["strategy"] == "dual_momentum"
+    assert "kr_selected" in summary
+    assert "us_selected" in summary
+    assert "lookback_months" in summary
+    assert summary["lookback_months"] == 3
+    
+    # Verify constraint checks
+    assert "constraint_checks" in summary
+    constraint_checks = summary["constraint_checks"]
+    assert "passed" in constraint_checks
+    
+    # Verify plan items have meaningful reasons
+    for item in plan_response.items:
+        assert item.reason is not None
+        assert "Momentum score" in item.reason
+        assert "rank" in item.reason.lower()
+    
+    # Verify momentum-based selection (KR top 2, US top 4)
+    kr_items = [item for item in plan_response.items if item.market == Market.KR]
+    us_items = [item for item in plan_response.items if item.market == Market.US]
+    assert len(kr_items) <= 2  # kr_top_m = 2
+    assert len(us_items) <= 4  # us_top_n = 4
+    
+    # Verify constraints: max_positions=20, max_weight_per_name=0.08, kr_us_split=(0.4, 0.6)
+    assert len(plan_response.items) <= 20
+    for item in plan_response.items:
+        assert item.target_weight <= 0.08  # max_weight_per_name
+    
+    kr_weight = sum(item.target_weight for item in kr_items)
+    us_weight = sum(item.target_weight for item in us_items)
+    total_weight = kr_weight + us_weight
+    if total_weight > 0:
+        kr_ratio = kr_weight / total_weight
+        us_ratio = us_weight / total_weight
+        # Allow small tolerance for rounding
+        assert abs(kr_ratio - 0.4) < 0.05 or abs(us_ratio - 0.6) < 0.05
 
     # Verify plan in DB
     plan = db_session.query(RebalancePlan).filter(RebalancePlan.id == plan_id).first()

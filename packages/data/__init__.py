@@ -3,10 +3,10 @@
 import csv
 import os
 from pathlib import Path
-from typing import list
+from typing import List
 
 
-def load_universe(market: str) -> list[str]:
+def load_universe(market: str) -> List[str]:
     """Load universe symbols from CSV file.
 
     Args:
