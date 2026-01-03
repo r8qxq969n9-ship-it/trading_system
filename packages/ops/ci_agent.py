@@ -30,7 +30,7 @@ class CIFailureReason:
     """CI 실패 원인 분류."""
 
     RUFF_LINT = "ruff_lint"
-    RUFF_FORMAT = "ruff_format"
+    BLACK_FORMAT = "black_format"
     TEST_FAILURE = "test_failure"
     MIGRATION_FAILURE = "migration_failure"
     DEPENDENCY_FAILURE = "dependency_failure"
@@ -275,12 +275,11 @@ def map_failure_reason(step_name: str | None, job_name: str | None) -> str:
         return CIFailureReason.UNKNOWN
 
     search_text = (step_name or "").lower() + " " + (job_name or "").lower()
-
-    if "ruff" in search_text:
-        if "format" in search_text:
-            return CIFailureReason.RUFF_FORMAT
-        else:
-            return CIFailureReason.RUFF_LINT
+    
+    if "ruff" in search_text and "format" not in search_text:
+        return CIFailureReason.RUFF_LINT
+    elif "black" in search_text or ("format" in search_text and "ruff" not in search_text):
+        return CIFailureReason.BLACK_FORMAT
     elif "alembic" in search_text or "migration" in search_text:
         return CIFailureReason.MIGRATION_FAILURE
     elif "pytest" in search_text or "test" in search_text:
@@ -327,7 +326,7 @@ def analyze_ci_failure(owner: str, repo: str, run_id: str, token: str) -> dict[s
 
 def can_auto_fix(failure_reason: str) -> bool:
     """자동 수정 가능 여부 판단."""
-    return failure_reason in [CIFailureReason.RUFF_LINT, CIFailureReason.RUFF_FORMAT]
+    return failure_reason in [CIFailureReason.RUFF_LINT, CIFailureReason.BLACK_FORMAT]
 
 
 def apply_fixes(failure_reason: str) -> tuple[bool, str]:
@@ -348,17 +347,17 @@ def apply_fixes(failure_reason: str) -> tuple[bool, str]:
             logger.info(f"Ruff fixes: returncode={result1.returncode}")
             if result1.stdout:
                 logger.info(f"Ruff output: {result1.stdout[:500]}")
-
-            logger.info("Applying ruff format...")
+            
+            logger.info("Applying black formatting...")
             result2 = subprocess.run(
-                ["ruff", "format", "."],
+                ["black", "."],
                 capture_output=True,
                 text=True,
                 timeout=60,
             )
             if result2.returncode != 0:
                 error_msg = result2.stdout + result2.stderr
-                logger.error(f"ruff format failed: {error_msg[:500]}")
+                logger.error(f"black format failed: {error_msg[:500]}")
                 return False, error_msg[:2000]
 
             # 재검증: ruff check
@@ -373,50 +372,50 @@ def apply_fixes(failure_reason: str) -> tuple[bool, str]:
                 error_msg = result3.stdout + result3.stderr
                 logger.error(f"Ruff check re-validation failed: {error_msg[:500]}")
                 return False, error_msg[:2000]
-
-            # 재검증: ruff format --check
-            logger.info("Re-validating ruff format...")
+            
+            # 재검증: black --check
+            logger.info("Re-validating black format...")
             result4 = subprocess.run(
-                ["ruff", "format", "--check", "."],
+                ["black", "--check", "."],
                 capture_output=True,
                 text=True,
                 timeout=60,
             )
             if result4.returncode != 0:
                 error_msg = result4.stdout + result4.stderr
-                logger.error(f"Ruff format re-validation failed: {error_msg[:500]}")
+                logger.error(f"Black format re-validation failed: {error_msg[:500]}")
                 return False, error_msg[:2000]
-
-            logger.info("Ruff fixes applied and validated successfully")
+            
+            logger.info("Ruff fixes and black formatting applied and validated successfully")
             return True, ""
 
-        elif failure_reason == CIFailureReason.RUFF_FORMAT:
-            logger.info("Applying ruff format...")
+        elif failure_reason == CIFailureReason.BLACK_FORMAT:
+            logger.info("Applying black formatting...")
             result1 = subprocess.run(
-                ["ruff", "format", "."],
+                ["black", "."],
                 capture_output=True,
                 text=True,
                 timeout=60,
             )
             if result1.returncode != 0:
                 error_msg = result1.stdout + result1.stderr
-                logger.error(f"ruff format failed: {error_msg[:500]}")
+                logger.error(f"black format failed: {error_msg[:500]}")
                 return False, error_msg[:2000]
-
-            # 재검증: ruff format --check
-            logger.info("Re-validating ruff format...")
+            
+            # 재검증: black --check
+            logger.info("Re-validating black format...")
             result2 = subprocess.run(
-                ["ruff", "format", "--check", "."],
+                ["black", "--check", "."],
                 capture_output=True,
                 text=True,
                 timeout=60,
             )
             if result2.returncode != 0:
                 error_msg = result2.stdout + result2.stderr
-                logger.error(f"Ruff format re-validation failed: {error_msg[:500]}")
+                logger.error(f"Black format re-validation failed: {error_msg[:500]}")
                 return False, error_msg[:2000]
-
-            logger.info("Ruff format applied and validated successfully")
+            
+            logger.info("Black formatting applied and validated successfully")
             return True, ""
 
         return False, "Unknown failure reason"
@@ -490,8 +489,8 @@ def commit_and_push(retry_count: int, failure_reason: str) -> bool:
         # 커밋 메시지 생성 ([skip ci] 금지)
         if failure_reason == CIFailureReason.RUFF_LINT:
             commit_msg = f"ci-fix: ruff auto-fix (attempt {retry_count + 1}/{MAX_RETRIES})"
-        elif failure_reason == CIFailureReason.RUFF_FORMAT:
-            commit_msg = f"ci-fix: ruff format auto-fix (attempt {retry_count + 1}/{MAX_RETRIES})"
+        elif failure_reason == CIFailureReason.BLACK_FORMAT:
+            commit_msg = f"ci-fix: black auto-fix (attempt {retry_count + 1}/{MAX_RETRIES})"
         else:
             commit_msg = f"ci-fix: auto-fix (attempt {retry_count + 1}/{MAX_RETRIES})"
 
