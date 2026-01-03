@@ -216,7 +216,10 @@ async def generate_plan(
     run.status = RunStatus.DONE
     db.commit()
     
-    # 12. Record audit event
+    # 12. Get items for calculating items_count
+    items = db.query(PlanItem).filter(PlanItem.plan_id == plan.id).all()
+    
+    # 13. Record audit event
     record_audit_event(
         db=db,
         event_type="plan_created",
@@ -239,9 +242,6 @@ async def generate_plan(
             "constraint_passed": passed,
         },
     )
-    
-    # 14. Get items for response
-    items = db.query(PlanItem).filter(PlanItem.plan_id == plan.id).all()
     
     return PlanResponse(
         id=plan.id,
