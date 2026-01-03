@@ -6,18 +6,13 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy.orm import Session
 
 # Import routers
 from apps.api.routers import configs, controls, data, executions, health, plans, portfolio
-from packages.core.database import get_session_factory
 from packages.ops.logging import setup_logging
 
 # Setup logging
 setup_logging()
-
-# Database
-SessionLocal = get_session_factory()
 
 
 @asynccontextmanager
@@ -61,16 +56,6 @@ async def add_request_ids(request: Request, call_next: Callable) -> Response:
     response.headers["X-Run-ID"] = run_id
 
     return response
-
-
-# Dependency: DB session
-def get_db() -> Session:
-    """Get database session."""
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
 
 
 app.include_router(health.router, prefix="/health", tags=["health"])
