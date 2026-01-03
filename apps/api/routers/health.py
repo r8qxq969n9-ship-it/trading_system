@@ -3,7 +3,7 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
-from apps.api.main import get_db
+from apps.api.dependencies import get_db
 from packages.ops.health import check_health
 
 router = APIRouter()

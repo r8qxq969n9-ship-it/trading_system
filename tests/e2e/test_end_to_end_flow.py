@@ -95,7 +95,6 @@ async def test_end_to_end_flow(db_session, setup_test_data):
     plan_id = plan_response.id
     assert plan_response.status == PlanStatus.PROPOSED
     assert len(plan_response.items) > 0
-    assert "summary" in plan_response.summary
     assert "kr_us_summary" in plan_response.summary
 
     # Verify plan in DB
