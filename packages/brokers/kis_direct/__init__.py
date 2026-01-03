@@ -1,0 +1,2 @@
+"""KIS Direct adapter."""
+

@@ -1,0 +1,2 @@
+"""Worker application with APScheduler."""
+

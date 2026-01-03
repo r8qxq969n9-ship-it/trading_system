@@ -1,0 +1,170 @@
+해외선물옵션 증거금상세,,,,,,
+API 통신방식,REST,,,,,
+메뉴 위치,[해외선물옵션] 주문/계좌,,,,,
+API 명,해외선물옵션 증거금상세,,,,,
+API ID,해외선물-032,,,,,
+실전 TR_ID,OTFM3115R,,,,,
+모의 TR_ID,모의투자 미지원,,,,,
+기본정보,,,,,,
+HTTP Method,GET,,,,,
+실전 Domain,https://openapi.koreainvestment.com:9443,,,,,
+모의 Domain,미지원,,,,,
+URL 명,/uapi/overseas-futureoption/v1/trading/margin-detail,,,,,
+개요,,,,,,
+개요,"해외선물옵션 증거금상세 API입니다.
+한국투자 HTS(eFriend Force) &gt; [0867] 해외선물옵션 증거금상세 화면 의 기능을 API로 개발한 사항으로, 해당 화면을 참고하시면 기능을 이해하기 쉽습니다.
+
+[증거금 상세설명]
+- SPAN, EUREX 증거금
+1. 가격변동증거금 : 보유하고 있는 미결제를 Product Class 별로 구간[SPAN-16구간, EUREX-29구간)손익 합계액 산출하며 최대손실구간의 금액을 해당 Class의 증거금으로 산정
+2. 스프레드증거금 : 보유하고 있는 미결제를 Product Class 별로 스프레드 산정하며 스프레드 증거금 적용
+** 스프레드 산정방법 : SPAN은 선물+옵션의 Delta Spread로 계산, EUREX는 선물의 Spread만 산정 보유중인 옵선가치를 평가하며 청산가치가 양수(고객미 수취할 금액이 있는 경우)에 해당하는 금액을 증거금에서 할인
+3. 옵션가격증거금 : 보유중인 옵션가치를 평가하여 청산가치가 양수(고객이 수취할 금액이 있는 경우)에 해당하는 금액을 증거금에서 할인
+**계산식 : MAXID, 온선평가대금 Class별 합계액) ** 산출된 값을 음수처리함 옵션 미결제약정에 대해 최소로 징구하는 증거금
+4. 옵선최소증거금 증거금 : 옵션 미결제약정에 대해 최소로 징구하는 증거금
+",,,,,
+Layout,,,,,,
+구분,Element,한글명,Type,Required,Length,Description
+Request Header,content-type,컨텐츠타입,string,Y,40,application/json; charset=utf-8
+,authorization,접근토큰,string,Y,350,"OAuth 토큰이 필요한 API 경우 발급한 Access token 
+일반고객(Access token 유효기간 1일, OAuth 2.0의 Client Credentials Grant 절차를 준용) 
+법인(Access token 유효기간 3개월, Refresh token 유효기간 1년, OAuth 2.0의 Authorization Code Grant 절차를 준용)"
+,appkey,앱키,string,Y,36,한국투자증권 홈페이지에서 발급받은 appkey (절대 노출되지 않도록 주의해주세요.)
+,appsecret,앱시크릿키,string,Y,180,한국투자증권 홈페이지에서 발급받은 appkey (절대 노출되지 않도록 주의해주세요.)
+,personalseckey,고객식별키,string,N,180,[법인 필수] 제휴사 회원 관리를 위한 고객식별키
+,tr_id,거래ID,string,Y,13,OTFM3115R
+,tr_cont,연속 거래 여부,string,N,1,"공백 : 초기 조회
+N : 다음 데이터 조회 (output header의 tr_cont가 M일 경우)"
+,custtype,고객 타입,string,Y,1,"B : 법인 
+P : 개인"
+,seq_no,일련번호,string,N,2,[법인 필수] 001
+,mac_address,맥주소,string,N,12,법인고객 혹은 개인고객의 Mac address 값
+,phone_number,핸드폰번호,string,N,12,"[법인 필수] 제휴사APP을 사용하는 경우 사용자(회원) 핸드폰번호 
+ex) 01011112222 (하이픈 등 구분값 제거)"
+,ip_addr,접속 단말 공인 IP,string,N,12,[법인 필수] 사용자(회원)의 IP Address
+,gt_uid,Global UID,string,N,32,[법인 전용] 거래고유번호로 사용하므로 거래별로 UNIQUE해야 함
+Request Query Parameter,CANO,종합계좌번호,string,Y,8, 
+,ACNT_PRDT_CD,계좌상품코드,string,Y,2, 
+,CRCY_CD,통화코드,string,Y,3,"'TKR(TOT_KRW), TUS(TOT_USD), 
+USD(미국달러), HKD(홍콩달러),
+CNY(중국위안화), JPY )일본엔화), VND(베트남동)'"
+,INQR_DT,조회일자,string,Y,8, 
+Response Header,content-type,컨텐츠타입,string,Y,40,application/json; charset=utf-8
+,tr_id,거래ID,string,Y,13,요청한 tr_id
+,tr_cont,연속 거래 여부,string,N,1,"F or M : 다음 데이터 있음
+D or E : 마지막 데이터"
+,gt_uid,Global UID,string,N,32,[법인 전용] 거래고유번호로 사용하므로 거래별로 UNIQUE해야 함
+Response Body,rt_cd,성공 실패 여부,string,Y,1, 
+,msg_cd,응답코드,string,Y,8, 
+,msg1,응답메세지,string,Y,80, 
+,output,응답상세,object,Y, , 
+,cano,종합계좌번호,string,Y,8, 
+,acnt_prdt_cd,계좌상품코드,string,Y,2, 
+,crcy_cd,통화코드,string,Y,3, 
+,resp_dt,응답일자,string,Y,8, 
+,acnt_net_risk_mgna_aply_yn,계좌순위험증거금적용여부,string,Y,1, 
+,fm_ord_psbl_amt,FM주문가능금액,string,Y,20, 
+,fm_add_mgn_amt,FM추가증거금액,string,Y,20, 
+,fm_brkg_mgn_amt,FM위탁증거금액,string,Y,20, 
+,fm_excc_brkg_mgn_amt,FM정산위탁증거금액,string,Y,20, 
+,fm_ustl_mgn_amt,FM미결제증거금액,string,Y,20, 
+,fm_mntn_mgn_amt,FM유지증거금액,string,Y,20, 
+,fm_ord_mgn_amt,FM주문증거금액,string,Y,20, 
+,fm_futr_ord_mgn_amt,FM선물주문증거금액,string,Y,20, 
+,fm_opt_buy_ord_amt,FM옵션매수주문금액,string,Y,20, 
+,fm_opt_sll_ord_mgn_amt,FM옵션매도주문증거금액,string,Y,20, 
+,fm_opt_buy_ord_mgn_amt,FM옵션매수주문증거금액,string,Y,20, 
+,fm_ecis_rsvn_mgn_amt,FM행사예약증거금액,string,Y,20, 
+,fm_span_brkg_mgn_amt,FMSPAN위탁증거금액,string,Y,20, 
+,fm_span_pric_altr_mgn_amt,FMSPAN가격변동증거금액,string,Y,20, 
+,fm_span_term_sprd_mgn_amt,FMSPAN기간스프레드증거금액,string,Y,20, 
+,fm_span_buy_opt_min_mgn_amt,FMSPAN옵션가격증거금액,string,Y,20, 
+,fm_span_opt_min_mgn_amt,FMSPAN옵션최소증거금액,string,Y,20, 
+,fm_span_tot_risk_mgn_amt,FMSPAN총위험증거금액,string,Y,20, 
+,fm_span_mntn_mgn_amt,FMSPAN유지증거금액,string,Y,20, 
+,fm_span_mntn_pric_altr_mgn_amt,FMSPAN유지가격변동증거금액,string,Y,20, 
+,fm_span_mntn_term_sprd_mgn_amt,FMSPAN유지기간스프레드증거금액,string,Y,20, 
+,fm_span_mntn_opt_pric_mgn_amt,FMSPAN유지옵션가격증거금액,string,Y,20, 
+,fm_span_mntn_opt_min_mgn_amt,FMSPAN유지옵션최소증거금액,string,Y,20, 
+,fm_span_mntn_tot_risk_mgn_amt,FMSPAN유지총위험증거금액,string,Y,20, 
+,fm_eurx_brkg_mgn_amt,FMEUREX위탁증거금액,string,Y,20, 
+,fm_eurx_pric_altr_mgn_amt,FMEUREX가격변동증거금액,string,Y,20, 
+,fm_eurx_term_sprd_mgn_amt,FMEUREX기간스프레드증거금액,string,Y,20, 
+,fm_eurx_opt_pric_mgn_amt,FMEUREX옵션가격증거금액,string,Y,20, 
+,fm_eurx_buy_opt_min_mgn_amt,FMEUREX매수옵션최소증거금액,string,Y,20, 
+,fm_eurx_tot_risk_mgn_amt,FMEUREX총위험증거금액,string,Y,20, 
+,fm_eurx_mntn_mgn_amt,FMEUREX유지증거금액,string,Y,20, 
+,fm_eurx_mntn_pric_altr_mgn_amt,FMEUREX유지가격변동증거금액,string,Y,20, 
+,fm_eurx_mntn_term_sprd_mgn_amt,FMEUREX기간스프레드증거금액,string,Y,20, 
+,fm_eurx_mntn_opt_pric_mgn_amt,FMEUREX유지옵션가격증거금액,string,Y,20, 
+,fm_eurx_mntn_tot_risk_mgn_amt,FMEUREX유지총위험증거금액,string,Y,20, 
+,fm_gnrl_brkg_mgn_amt,FM일반위탁증거금액,string,Y,20, 
+,fm_futr_ustl_mgn_amt,FM선물미결제증거금액,string,Y,20, 
+,fm_sll_opt_ustl_mgn_amt,FM매도옵션미결제증거금액,string,Y,20, 
+,fm_buy_opt_ustl_mgn_amt,FM매수옵션미결제증거금액,string,Y,20, 
+,fm_sprd_ustl_mgn_amt,FM스프레드미결제증거금액,string,Y,20, 
+,fm_avg_dsct_mgn_amt,FMAVG할인증거금액,string,Y,20, 
+,fm_gnrl_mntn_mgn_amt,FM일반유지증거금액,string,Y,20, 
+,fm_futr_mntn_mgn_amt,FM선물유지증거금액,string,Y,20, 
+,fm_opt_mntn_mgn_amt,FM옵션유지증거금액,string,Y,20, 
+Example,,,,,,
+Request Example (Python),"CANO:12345678
+ACNT_PRDT_CD:08
+CRCY_CD:TKR
+INQR_DT:20240522",,,,,
+Response Example,"{
+    ""output"": {
+        ""cano"": ""12345678"",
+        ""acnt_prdt_cd"": ""08"",
+        ""crcy_cd"": ""TKR"",
+        ""resp_dt"": ""20240522"",
+        ""acnt_net_risk_mgna_aply_yn"": ""Y"",
+        ""fm_ord_psbl_amt"": ""86128052"",
+        ""fm_add_mgn_amt"": ""0"",
+        ""fm_brkg_mgn_amt"": ""49082990"",
+        ""fm_excc_brkg_mgn_amt"": ""49082990"",
+        ""fm_ustl_mgn_amt"": ""49082990"",
+        ""fm_mntn_mgn_amt"": ""44620900"",
+        ""fm_ord_mgn_amt"": ""0"",
+        ""fm_futr_ord_mgn_amt"": ""0"",
+        ""fm_opt_buy_ord_amt"": ""0"",
+        ""fm_opt_sll_ord_mgn_amt"": ""0"",
+        ""fm_opt_buy_ord_mgn_amt"": ""0"",
+        ""fm_ecis_rsvn_mgn_amt"": ""0"",
+        ""fm_span_brkg_mgn_amt"": ""49082990"",
+        ""fm_span_pric_altr_mgn_amt"": ""49082990"",
+        ""fm_span_term_sprd_mgn_amt"": ""0"",
+        ""fm_span_buy_opt_min_mgn_amt"": ""0"",
+        ""fm_span_opt_min_mgn_amt"": ""0"",
+        ""fm_span_tot_risk_mgn_amt"": ""49082990"",
+        ""fm_span_mntn_mgn_amt"": ""44620900"",
+        ""fm_span_mntn_pric_altr_mgn_amt"": ""44620900"",
+        ""fm_span_mntn_term_sprd_mgn_amt"": ""0"",
+        ""fm_span_mntn_opt_pric_mgn_amt"": ""0"",
+        ""fm_span_mntn_opt_min_mgn_amt"": ""0"",
+        ""fm_span_mntn_tot_risk_mgn_amt"": ""44620900"",
+        ""fm_eurx_brkg_mgn_amt"": ""0"",
+        ""fm_eurx_pric_altr_mgn_amt"": ""0"",
+        ""fm_eurx_term_sprd_mgn_amt"": ""0"",
+        ""fm_eurx_opt_pric_mgn_amt"": ""0"",
+        ""fm_eurx_buy_opt_min_mgn_amt"": ""0"",
+        ""fm_eurx_tot_risk_mgn_amt"": ""0"",
+        ""fm_eurx_mntn_mgn_amt"": ""0"",
+        ""fm_eurx_mntn_pric_altr_mgn_amt"": ""0"",
+        ""fm_eurx_mntn_term_sprd_mgn_amt"": ""0"",
+        ""fm_eurx_mntn_opt_pric_mgn_amt"": ""0"",
+        ""fm_eurx_mntn_tot_risk_mgn_amt"": ""0"",
+        ""fm_gnrl_brkg_mgn_amt"": ""0"",
+        ""fm_futr_ustl_mgn_amt"": ""0"",
+        ""fm_sll_opt_ustl_mgn_amt"": ""0"",
+        ""fm_buy_opt_ustl_mgn_amt"": ""0"",
+        ""fm_sprd_ustl_mgn_amt"": ""0"",
+        ""fm_avg_dsct_mgn_amt"": ""0"",
+        ""fm_gnrl_mntn_mgn_amt"": ""0"",
+        ""fm_futr_mntn_mgn_amt"": ""0"",
+        ""fm_opt_mntn_mgn_amt"": ""0""
+    },
+    ""rt_cd"": ""0"",
+    ""msg_cd"": ""KIOK0510"",
+    ""msg1"": ""조회가 완료되었습니다                                                           ""
+}",,,,,

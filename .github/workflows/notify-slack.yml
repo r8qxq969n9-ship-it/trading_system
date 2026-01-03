@@ -1,0 +1,45 @@
+name: Notify Slack
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+  push:
+    branches: [main]
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+  release:
+    types: [published]
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion != 'cancelled'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Notify Slack (if webhook configured)
+        if: env.SLACK_WEBHOOK_DEV != ''
+        env:
+          SLACK_WEBHOOK_DEV: ${{ secrets.SLACK_WEBHOOK_DEV }}
+        run: |
+          if [ -z "$SLACK_WEBHOOK_DEV" ]; then
+            echo "SLACK_WEBHOOK_DEV not configured, skipping notification"
+            exit 0
+          fi
+          
+          MESSAGE=""
+          if [ "${{ github.event_name }}" == "pull_request" ]; then
+            MESSAGE="PR ${{ github.event.pull_request.title }} - ${{ github.event.action }}"
+          elif [ "${{ github.event_name }}" == "push" ]; then
+            MESSAGE="Push to ${{ github.ref }} - ${{ github.event.head_commit.message }}"
+          elif [ "${{ github.event_name }}" == "workflow_run" ]; then
+            MESSAGE="CI ${{ github.event.workflow_run.conclusion }}"
+          elif [ "${{ github.event_name }}" == "release" ]; then
+            MESSAGE="Release ${{ github.event.release.tag_name }}"
+          fi
+          
+          curl -X POST -H 'Content-type: application/json' \
+            --data "{\"text\":\"$MESSAGE\"}" \
+            $SLACK_WEBHOOK_DEV || true
+
