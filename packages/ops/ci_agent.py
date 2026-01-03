@@ -29,7 +29,7 @@ class CIFailureReason:
     """CI 실패 원인 분류."""
 
     RUFF_LINT = "ruff_lint"
-    BLACK_FORMAT = "black_format"
+    RUFF_FORMAT = "ruff_format"
     TEST_FAILURE = "test_failure"
     MIGRATION_FAILURE = "migration_failure"
     DEPENDENCY_FAILURE = "dependency_failure"
@@ -266,9 +266,10 @@ def map_failure_reason(step_name: str | None, job_name: str | None) -> str:
     search_text = (step_name or "").lower() + " " + (job_name or "").lower()
     
     if "ruff" in search_text:
-        return CIFailureReason.RUFF_LINT
-    elif "black" in search_text:
-        return CIFailureReason.BLACK_FORMAT
+        if "format" in search_text:
+            return CIFailureReason.RUFF_FORMAT
+        else:
+            return CIFailureReason.RUFF_LINT
     elif "alembic" in search_text or "migration" in search_text:
         return CIFailureReason.MIGRATION_FAILURE
     elif "pytest" in search_text or "test" in search_text:
@@ -313,7 +314,7 @@ def analyze_ci_failure(owner: str, repo: str, run_id: str, token: str) -> dict[s
 
 def can_auto_fix(failure_reason: str) -> bool:
     """자동 수정 가능 여부 판단."""
-    return failure_reason in [CIFailureReason.RUFF_LINT, CIFailureReason.BLACK_FORMAT]
+    return failure_reason in [CIFailureReason.RUFF_LINT, CIFailureReason.RUFF_FORMAT]
 
 
 def apply_fixes(failure_reason: str) -> tuple[bool, str]:
@@ -324,68 +325,85 @@ def apply_fixes(failure_reason: str) -> tuple[bool, str]:
     """
     try:
         if failure_reason == CIFailureReason.RUFF_LINT:
-            logger.info("Applying ruff fixes (safe fixes)...")
+            logger.info("Applying ruff fixes (safe + unsafe fixes)...")
             result1 = subprocess.run(
-                ["ruff", "check", ".", "--fix"],
-                capture_output=True,
-                text=True,
-                timeout=60,
-            )
-            logger.info(f"Ruff safe fixes: returncode={result1.returncode}")
-            if result1.stdout:
-                logger.info(f"Ruff output: {result1.stdout[:500]}")
-            
-            logger.info("Applying ruff fixes (unsafe fixes)...")
-            result2 = subprocess.run(
                 ["ruff", "check", ".", "--fix", "--unsafe-fixes"],
                 capture_output=True,
                 text=True,
                 timeout=60,
             )
-            logger.info(f"Ruff unsafe fixes: returncode={result2.returncode}")
-            if result2.stdout:
-                logger.info(f"Ruff output: {result2.stdout[:500]}")
+            logger.info(f"Ruff fixes: returncode={result1.returncode}")
+            if result1.stdout:
+                logger.info(f"Ruff output: {result1.stdout[:500]}")
             
-            logger.info("Applying black formatting...")
+            logger.info("Applying ruff format...")
+            result2 = subprocess.run(
+                ["ruff", "format", "."],
+                capture_output=True,
+                text=True,
+                timeout=60,
+            )
+            if result2.returncode != 0:
+                error_msg = result2.stdout + result2.stderr
+                logger.error(f"ruff format failed: {error_msg[:500]}")
+                return False, error_msg[:2000]
+            
+            # 재검증: ruff check
+            logger.info("Re-validating ruff check...")
             result3 = subprocess.run(
-                ["black", "."],
+                ["ruff", "check", "."],
                 capture_output=True,
                 text=True,
                 timeout=60,
             )
             if result3.returncode != 0:
-                logger.error(f"black format failed: {result3.stderr}")
-                return False, f"black format failed: {result3.stderr[:500]}"
+                error_msg = result3.stdout + result3.stderr
+                logger.error(f"Ruff check re-validation failed: {error_msg[:500]}")
+                return False, error_msg[:2000]
             
-            # 재검증: ruff check (수정 후 검증)
-            logger.info("Re-validating ruff check...")
+            # 재검증: ruff format --check
+            logger.info("Re-validating ruff format...")
             result4 = subprocess.run(
-                ["ruff", "check", "."],
+                ["ruff", "format", "--check", "."],
                 capture_output=True,
                 text=True,
                 timeout=60,
             )
             if result4.returncode != 0:
                 error_msg = result4.stdout + result4.stderr
-                logger.error(f"Ruff re-validation failed: {error_msg[:500]}")
+                logger.error(f"Ruff format re-validation failed: {error_msg[:500]}")
                 return False, error_msg[:2000]
             
             logger.info("Ruff fixes applied and validated successfully")
             return True, ""
 
-        elif failure_reason == CIFailureReason.BLACK_FORMAT:
-            logger.info("Applying black formatting...")
-            result = subprocess.run(
-                ["black", "."],
+        elif failure_reason == CIFailureReason.RUFF_FORMAT:
+            logger.info("Applying ruff format...")
+            result1 = subprocess.run(
+                ["ruff", "format", "."],
                 capture_output=True,
                 text=True,
                 timeout=60,
             )
-            if result.returncode != 0:
-                logger.error(f"black format failed: {result.stderr}")
-                return False, f"black format failed: {result.stderr[:500]}"
+            if result1.returncode != 0:
+                error_msg = result1.stdout + result1.stderr
+                logger.error(f"ruff format failed: {error_msg[:500]}")
+                return False, error_msg[:2000]
             
-            logger.info("Black formatting applied successfully")
+            # 재검증: ruff format --check
+            logger.info("Re-validating ruff format...")
+            result2 = subprocess.run(
+                ["ruff", "format", "--check", "."],
+                capture_output=True,
+                text=True,
+                timeout=60,
+            )
+            if result2.returncode != 0:
+                error_msg = result2.stdout + result2.stderr
+                logger.error(f"Ruff format re-validation failed: {error_msg[:500]}")
+                return False, error_msg[:2000]
+            
+            logger.info("Ruff format applied and validated successfully")
             return True, ""
 
         return False, "Unknown failure reason"
@@ -459,8 +477,8 @@ def commit_and_push(retry_count: int, failure_reason: str) -> bool:
         # 커밋 메시지 생성 ([skip ci] 금지)
         if failure_reason == CIFailureReason.RUFF_LINT:
             commit_msg = f"ci-fix: ruff auto-fix (attempt {retry_count + 1}/{MAX_RETRIES})"
-        elif failure_reason == CIFailureReason.BLACK_FORMAT:
-            commit_msg = f"ci-fix: black auto-fix (attempt {retry_count + 1}/{MAX_RETRIES})"
+        elif failure_reason == CIFailureReason.RUFF_FORMAT:
+            commit_msg = f"ci-fix: ruff format auto-fix (attempt {retry_count + 1}/{MAX_RETRIES})"
         else:
             commit_msg = f"ci-fix: auto-fix (attempt {retry_count + 1}/{MAX_RETRIES})"
 
@@ -584,8 +602,13 @@ def main():
         fix_success, fix_error = apply_fixes(failure_reason)
         if not fix_success:
             logger.error(f"Failed to apply fixes: {fix_error}")
-            # 재검증 실패 시 DECISION_REQUIRED
-            error_snippet = fix_error[-2000:] if len(fix_error) > 2000 else fix_error
+            # 재검증 실패 시 DECISION_REQUIRED (반드시 error_snippet 포함)
+            # 마지막 60줄 추출
+            error_lines = fix_error.split("\n")
+            error_snippet = "\n".join(error_lines[-60:]) if len(error_lines) > 60 else fix_error
+            if len(error_snippet) > 2000:
+                error_snippet = error_snippet[-2000:]
+            
             send(
                 AlertLevel.DECISION_REQUIRED,
                 "decisions",

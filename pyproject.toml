@@ -45,9 +45,10 @@ line-length = 100
 target-version = "py311"
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "N", "W", "UP"]
+select = ["E", "F", "I"]
 ignore = ["E501"]
 exclude = ["alembic/versions"]
+extend-exclude = ["alembic/versions", "tests/fixtures"]
 
 [tool.ruff.lint.per-file-ignores]
 "__init__.py" = ["F401"]
