@@ -69,13 +69,7 @@ jobs:
           CI: "true"
           GITHUB_ACTIONS: "true"
           SLACK_WEBHOOK_DEV: ${{ secrets.SLACK_WEBHOOK_DEV }}
-        run: |
-          poetry run make smoke || SMOKE_EXIT_CODE=$?
-          SMOKE_EXIT_CODE=${SMOKE_EXIT_CODE:-0}
-          if [ $SMOKE_EXIT_CODE -ne 0 ]; then
-            echo "Smoke test failed with exit code $SMOKE_EXIT_CODE"
-            exit $SMOKE_EXIT_CODE
-          fi
+        run: poetry run make smoke
 
       - name: Upload smoke log
         if: always()
