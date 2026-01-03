@@ -4,6 +4,7 @@ CI 실패 시 로그를 분석하고 자동 수정 가능한 이슈를 처리합
 """
 
 import gzip
+import json  # intentionally unused for CI auto-fix validation
 import logging
 import os
 import re
@@ -463,13 +464,31 @@ def has_changes() -> bool:
         return False
 
 
-def commit_and_push(retry_count: int, failure_reason: str) -> bool:
-    """변경사항 커밋 및 push."""
+def commit_and_push(retry_count: int, failure_reason: str, target_branch: str = "") -> bool:
+    """변경사항 커밋 및 push.
+    
+    Args:
+        retry_count: 재시도 횟수
+        failure_reason: 실패 원인
+        target_branch: 대상 브랜치 (detached HEAD 상태에서 push하기 위해 필요)
+    """
     try:
         # 변경사항 확인 (git diff 사용)
         if not has_changes():
             logger.info("No changes to commit")
             return False
+
+        # git remote 확인
+        remote_check = subprocess.run(
+            ["git", "remote", "-v"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if remote_check.returncode != 0:
+            logger.error("Failed to check git remote")
+            return False
+        logger.info(f"Git remotes: {remote_check.stdout.strip()}")
 
         # git config 설정 (필요한 경우)
         subprocess.run(
@@ -501,29 +520,58 @@ def commit_and_push(retry_count: int, failure_reason: str) -> bool:
             timeout=10,
         )
 
-        # 현재 브랜치 가져오기
-        branch_result = subprocess.run(
-            ["git", "rev-parse", "--abbrev-ref", "HEAD"],
-            capture_output=True,
-            text=True,
-            timeout=5,
-        )
-        branch = branch_result.stdout.strip()
+        # Push: detached HEAD 상태를 고려하여 refspec 사용
+        if target_branch:
+            # TARGET_BRANCH가 제공되면 refspec으로 push
+            refspec = f"HEAD:refs/heads/{target_branch}"
+            logger.info(f"Pushing to {refspec} (target_branch={target_branch})")
+            push_result = subprocess.run(
+                ["git", "push", "origin", refspec],
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+        else:
+            # TARGET_BRANCH가 없으면 기존 방식 (fallback)
+            branch_result = subprocess.run(
+                ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+            branch = branch_result.stdout.strip()
+            if branch == "HEAD":
+                # detached HEAD 상태인 경우
+                error_msg = "Push failed: detached HEAD detected and TARGET_BRANCH not provided"
+                logger.error(error_msg)
+                return False
+            logger.info(f"Pushing to branch {branch}")
+            push_result = subprocess.run(
+                ["git", "push", "origin", branch],
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
 
-        # Push
-        subprocess.run(
-            ["git", "push", "origin", branch],
-            check=True,
-            timeout=30,
-        )
+        if push_result.returncode != 0:
+            error_output = push_result.stderr or push_result.stdout
+            error_msg = f"Push failed (detached HEAD) - refspec fix needed. Error: {error_output[:500]}"
+            logger.error(error_msg)
+            return False
 
         logger.info(f"Successfully committed and pushed changes (retry {retry_count + 1})")
         return True
     except subprocess.CalledProcessError as e:
-        logger.error(f"Git operation failed: {e}")
+        error_msg = f"Git operation failed: {e}"
+        if "detached HEAD" in str(e) or "HEAD" in str(e):
+            error_msg += " (detached HEAD) - refspec fix needed"
+        logger.error(error_msg)
         return False
     except Exception as e:
-        logger.error(f"Failed to commit and push: {e}")
+        error_msg = f"Failed to commit and push: {e}"
+        if "detached HEAD" in str(e) or "HEAD" in str(e):
+            error_msg += " (detached HEAD) - refspec fix needed"
+        logger.error(error_msg)
         return False
 
 
@@ -581,16 +629,20 @@ def main():
         logger.info(f"Failed job: {failed_job}")
         logger.info(f"Failed step: {failed_step}")
 
-        # 에러 메시지 스니펫 추출 (20-40줄)
+        # 에러 메시지 스니펫 추출 (pytest/migration은 60줄, lint/format은 40줄)
         error_lines = error_message.split("\n")
-        error_snippet = "\n".join(error_lines[-40:]) if len(error_lines) > 40 else error_message
+        # pytest/migration 실패 시 60줄, lint/format은 40줄
+        if failure_reason in [CIFailureReason.TEST_FAILURE, CIFailureReason.MIGRATION_FAILURE]:
+            error_snippet = "\n".join(error_lines[-60:]) if len(error_lines) > 60 else error_message
+        else:
+            error_snippet = "\n".join(error_lines[-40:]) if len(error_lines) > 40 else error_message
         if len(error_snippet) > 2000:
             error_snippet = error_snippet[-2000:]
 
         # 자동 수정 가능 여부 확인
         if not can_auto_fix(failure_reason):
             logger.warning(f"Cannot auto-fix: {failure_reason}")
-            # DECISION_REQUIRED 알림 (개선된 메시지)
+            # DECISION_REQUIRED 알림 (pytest/migration은 60줄 error_snippet 필수)
             send(
                 AlertLevel.DECISION_REQUIRED,
                 "decisions",
@@ -664,9 +716,15 @@ def main():
 
         # 커밋 및 push
         logger.info("Committing and pushing changes...")
-        if not commit_and_push(retry_count, failure_reason):
+        if not commit_and_push(retry_count, failure_reason, target_branch):
             logger.warning("Push failed")
             # Push 실패한 경우
+            error_msg = "Auto-fix applied but push failed"
+            if not target_branch:
+                error_msg += " (detached HEAD) - refspec fix needed: TARGET_BRANCH not provided"
+            else:
+                error_msg += f" (detached HEAD) - refspec fix needed: push to {target_branch} failed"
+            
             if retry_count >= MAX_RETRIES - 1:
                 # 마지막 시도에서도 실패한 경우
                 send(
@@ -676,9 +734,10 @@ def main():
                     {
                         "run_url": run_url,
                         "target_sha7": target_sha[:7] if target_sha else "unknown",
+                        "target_branch": target_branch or "unknown",
                         "failure_reason": failure_reason,
                         "retry_count": retry_count + 1,
-                        "message": "Auto-fix applied but push failed",
+                        "message": error_msg,
                     },
                 )
             sys.exit(1)
