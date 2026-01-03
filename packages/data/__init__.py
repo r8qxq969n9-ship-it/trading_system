@@ -3,7 +3,6 @@
 import csv
 import os
 from pathlib import Path
-from typing import list
 
 
 def load_universe(market: str) -> list[str]:
