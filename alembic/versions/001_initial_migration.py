@@ -19,30 +19,82 @@ depends_on = None
 
 
 def upgrade() -> None:
-    # Create enums
-    op.execute("CREATE TYPE tradingmode AS ENUM ('SIMULATION', 'PAPER', 'LIVE')")
-    op.execute("CREATE TYPE planstatus AS ENUM ('PROPOSED', 'APPROVED', 'REJECTED', 'EXPIRED')")
-    op.execute(
-        "CREATE TYPE executionstatus AS ENUM ('PENDING', 'RUNNING', 'DONE', 'FAILED', 'CANCELED')"
+    # Create enums (once, with checkfirst=True to avoid duplicates)
+    bind = op.get_bind()
+
+    tradingmode = postgresql.ENUM("SIMULATION", "PAPER", "LIVE", name="tradingmode")
+    tradingmode.create(bind, checkfirst=True)
+
+    planstatus = postgresql.ENUM("PROPOSED", "APPROVED", "REJECTED", "EXPIRED", name="planstatus")
+    planstatus.create(bind, checkfirst=True)
+
+    executionstatus = postgresql.ENUM(
+        "PENDING", "RUNNING", "DONE", "FAILED", "CANCELED", name="executionstatus"
     )
-    op.execute("CREATE TYPE runkind AS ENUM ('SIMULATION', 'PAPER', 'PLAN', 'EXECUTE')")
-    op.execute("CREATE TYPE runstatus AS ENUM ('STARTED', 'DONE', 'FAILED')")
-    op.execute("CREATE TYPE market AS ENUM ('KR', 'US')")
-    op.execute("CREATE TYPE orderside AS ENUM ('BUY', 'SELL')")
-    op.execute(
-        "CREATE TYPE orderstatus AS ENUM ('CREATED', 'SENT', 'PARTIAL', 'FILLED', 'CANCELED', 'FAILED', 'SKIPPED')"
+    executionstatus.create(bind, checkfirst=True)
+
+    runkind = postgresql.ENUM("SIMULATION", "PAPER", "PLAN", "EXECUTE", name="runkind")
+    runkind.create(bind, checkfirst=True)
+
+    runstatus = postgresql.ENUM("STARTED", "DONE", "FAILED", name="runstatus")
+    runstatus.create(bind, checkfirst=True)
+
+    market = postgresql.ENUM("KR", "US", name="market")
+    market.create(bind, checkfirst=True)
+
+    orderside = postgresql.ENUM("BUY", "SELL", name="orderside")
+    orderside.create(bind, checkfirst=True)
+
+    orderstatus = postgresql.ENUM(
+        "CREATED", "SENT", "PARTIAL", "FILLED", "CANCELED", "FAILED", "SKIPPED", name="orderstatus"
     )
-    op.execute("CREATE TYPE alertlevel AS ENUM ('INFO', 'WARN', 'ERROR', 'DECISION_REQUIRED')")
+    orderstatus.create(bind, checkfirst=True)
+
+    alertlevel = postgresql.ENUM("INFO", "WARN", "ERROR", "DECISION_REQUIRED", name="alertlevel")
+    alertlevel.create(bind, checkfirst=True)
+
+    # Define enum types for use in create_table (create_type=False)
+    tradingmode_t = postgresql.ENUM(
+        "SIMULATION", "PAPER", "LIVE", name="tradingmode", create_type=False
+    )
+    planstatus_t = postgresql.ENUM(
+        "PROPOSED", "APPROVED", "REJECTED", "EXPIRED", name="planstatus", create_type=False
+    )
+    executionstatus_t = postgresql.ENUM(
+        "PENDING",
+        "RUNNING",
+        "DONE",
+        "FAILED",
+        "CANCELED",
+        name="executionstatus",
+        create_type=False,
+    )
+    runkind_t = postgresql.ENUM(
+        "SIMULATION", "PAPER", "PLAN", "EXECUTE", name="runkind", create_type=False
+    )
+    runstatus_t = postgresql.ENUM("STARTED", "DONE", "FAILED", name="runstatus", create_type=False)
+    market_t = postgresql.ENUM("KR", "US", name="market", create_type=False)
+    orderside_t = postgresql.ENUM("BUY", "SELL", name="orderside", create_type=False)
+    orderstatus_t = postgresql.ENUM(
+        "CREATED",
+        "SENT",
+        "PARTIAL",
+        "FILLED",
+        "CANCELED",
+        "FAILED",
+        "SKIPPED",
+        name="orderstatus",
+        create_type=False,
+    )
+    alertlevel_t = postgresql.ENUM(
+        "INFO", "WARN", "ERROR", "DECISION_REQUIRED", name="alertlevel", create_type=False
+    )
 
     # config_versions
     op.create_table(
         "config_versions",
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),
-        sa.Column(
-            "mode",
-            postgresql.ENUM("SIMULATION", "PAPER", "LIVE", name="tradingmode"),
-            nullable=False,
-        ),
+        sa.Column("mode", tradingmode_t, nullable=False),
         sa.Column("strategy_name", sa.Text(), nullable=False),
         sa.Column("strategy_params", postgresql.JSONB(astext_type=sa.Text()), nullable=False),
         sa.Column("constraints", postgresql.JSONB(astext_type=sa.Text()), nullable=False),
@@ -75,11 +127,7 @@ def upgrade() -> None:
         "portfolio_snapshots",
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),
         sa.Column("asof", sa.TIMESTAMP(timezone=True), nullable=False),
-        sa.Column(
-            "mode",
-            postgresql.ENUM("SIMULATION", "PAPER", "LIVE", name="tradingmode"),
-            nullable=False,
-        ),
+        sa.Column("mode", tradingmode_t, nullable=False),
         sa.Column("positions", postgresql.JSONB(astext_type=sa.Text()), nullable=False),
         sa.Column("cash", sa.Numeric(), nullable=False),
         sa.Column("nav", sa.Numeric(), nullable=False),
@@ -95,14 +143,8 @@ def upgrade() -> None:
     op.create_table(
         "runs",
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),
-        sa.Column(
-            "kind",
-            postgresql.ENUM("SIMULATION", "PAPER", "PLAN", "EXECUTE", name="runkind"),
-            nullable=False,
-        ),
-        sa.Column(
-            "status", postgresql.ENUM("STARTED", "DONE", "FAILED", name="runstatus"), nullable=False
-        ),
+        sa.Column("kind", runkind_t, nullable=False),
+        sa.Column("status", runstatus_t, nullable=False),
         sa.Column(
             "started_at",
             sa.TIMESTAMP(timezone=True),
@@ -133,12 +175,7 @@ def upgrade() -> None:
             sa.ForeignKey("data_snapshots.id"),
             nullable=False,
         ),
-        sa.Column(
-            "status",
-            postgresql.ENUM("PROPOSED", "APPROVED", "REJECTED", "EXPIRED", name="planstatus"),
-            nullable=False,
-            server_default="PROPOSED",
-        ),
+        sa.Column("status", planstatus_t, nullable=False, server_default="PROPOSED"),
         sa.Column("summary", postgresql.JSONB(astext_type=sa.Text()), nullable=False),
         sa.Column(
             "created_at",
@@ -167,7 +204,7 @@ def upgrade() -> None:
             nullable=False,
         ),
         sa.Column("symbol", sa.Text(), nullable=False),
-        sa.Column("market", postgresql.ENUM("KR", "US", name="market"), nullable=False),
+        sa.Column("market", market_t, nullable=False),
         sa.Column("current_weight", sa.Numeric(), nullable=False),
         sa.Column("target_weight", sa.Numeric(), nullable=False),
         sa.Column("delta_weight", sa.Numeric(), nullable=False),
@@ -185,14 +222,7 @@ def upgrade() -> None:
             sa.ForeignKey("rebalance_plans.id"),
             nullable=False,
         ),
-        sa.Column(
-            "status",
-            postgresql.ENUM(
-                "PENDING", "RUNNING", "DONE", "FAILED", "CANCELED", name="executionstatus"
-            ),
-            nullable=False,
-            server_default="PENDING",
-        ),
+        sa.Column("status", executionstatus_t, nullable=False, server_default="PENDING"),
         sa.Column("started_at", sa.TIMESTAMP(timezone=True), nullable=True),
         sa.Column("ended_at", sa.TIMESTAMP(timezone=True), nullable=True),
         sa.Column("policy", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
@@ -217,25 +247,11 @@ def upgrade() -> None:
             nullable=True,
         ),
         sa.Column("symbol", sa.Text(), nullable=False),
-        sa.Column("side", postgresql.ENUM("BUY", "SELL", name="orderside"), nullable=False),
+        sa.Column("side", orderside_t, nullable=False),
         sa.Column("qty", sa.Numeric(), nullable=False),
         sa.Column("order_type", sa.Text(), nullable=False),
         sa.Column("limit_price", sa.Numeric(), nullable=True),
-        sa.Column(
-            "status",
-            postgresql.ENUM(
-                "CREATED",
-                "SENT",
-                "PARTIAL",
-                "FILLED",
-                "CANCELED",
-                "FAILED",
-                "SKIPPED",
-                name="orderstatus",
-            ),
-            nullable=False,
-            server_default="CREATED",
-        ),
+        sa.Column("status", orderstatus_t, nullable=False, server_default="CREATED"),
         sa.Column("broker_order_id", sa.Text(), nullable=True),
         sa.Column("error", sa.Text(), nullable=True),
         sa.Column(
@@ -281,11 +297,7 @@ def upgrade() -> None:
     op.create_table(
         "alerts_sent",
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),
-        sa.Column(
-            "level",
-            postgresql.ENUM("INFO", "WARN", "ERROR", "DECISION_REQUIRED", name="alertlevel"),
-            nullable=False,
-        ),
+        sa.Column("level", alertlevel_t, nullable=False),
         sa.Column("channel", sa.Text(), nullable=False),
         sa.Column("title", sa.Text(), nullable=False),
         sa.Column("body", postgresql.JSONB(astext_type=sa.Text()), nullable=False),
@@ -327,12 +339,36 @@ def downgrade() -> None:
     op.drop_table("data_snapshots")
     op.drop_table("config_versions")
 
-    op.execute("DROP TYPE alertlevel")
-    op.execute("DROP TYPE orderstatus")
-    op.execute("DROP TYPE orderside")
-    op.execute("DROP TYPE market")
-    op.execute("DROP TYPE runstatus")
-    op.execute("DROP TYPE runkind")
-    op.execute("DROP TYPE executionstatus")
-    op.execute("DROP TYPE planstatus")
-    op.execute("DROP TYPE tradingmode")
+    # Drop enum types (with checkfirst=True to avoid errors if already dropped)
+    bind = op.get_bind()
+
+    alertlevel = postgresql.ENUM("INFO", "WARN", "ERROR", "DECISION_REQUIRED", name="alertlevel")
+    alertlevel.drop(bind, checkfirst=True)
+
+    orderstatus = postgresql.ENUM(
+        "CREATED", "SENT", "PARTIAL", "FILLED", "CANCELED", "FAILED", "SKIPPED", name="orderstatus"
+    )
+    orderstatus.drop(bind, checkfirst=True)
+
+    orderside = postgresql.ENUM("BUY", "SELL", name="orderside")
+    orderside.drop(bind, checkfirst=True)
+
+    market = postgresql.ENUM("KR", "US", name="market")
+    market.drop(bind, checkfirst=True)
+
+    runstatus = postgresql.ENUM("STARTED", "DONE", "FAILED", name="runstatus")
+    runstatus.drop(bind, checkfirst=True)
+
+    runkind = postgresql.ENUM("SIMULATION", "PAPER", "PLAN", "EXECUTE", name="runkind")
+    runkind.drop(bind, checkfirst=True)
+
+    executionstatus = postgresql.ENUM(
+        "PENDING", "RUNNING", "DONE", "FAILED", "CANCELED", name="executionstatus"
+    )
+    executionstatus.drop(bind, checkfirst=True)
+
+    planstatus = postgresql.ENUM("PROPOSED", "APPROVED", "REJECTED", "EXPIRED", name="planstatus")
+    planstatus.drop(bind, checkfirst=True)
+
+    tradingmode = postgresql.ENUM("SIMULATION", "PAPER", "LIVE", name="tradingmode")
+    tradingmode.drop(bind, checkfirst=True)
