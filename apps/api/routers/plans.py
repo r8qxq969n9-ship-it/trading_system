@@ -7,7 +7,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
-from apps.api.main import get_db
+from apps.api.dependencies import get_db
 from packages.brokers import get_broker
 from packages.core.constraints import ConstraintChecker
 from packages.core.models import (
