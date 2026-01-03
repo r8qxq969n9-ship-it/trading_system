@@ -4,7 +4,6 @@ CI 실패 시 로그를 분석하고 자동 수정 가능한 이슈를 처리합
 """
 
 import gzip
-import io
 import logging
 import os
 import re
@@ -18,7 +17,9 @@ from packages.core.models import AlertLevel
 from packages.ops.slack import send
 
 logger = logging.getLogger(__name__)
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
 
 # GitHub API base URL
 GITHUB_API_BASE = "https://api.github.com"
@@ -89,7 +90,11 @@ def get_retry_count_from_commits() -> int:
         )
         if result.returncode == 0 and result.stdout:
             # 매칭되는 커밋 수 계산
-            lines = [line for line in result.stdout.strip().split("\n") if line and "[CI Auto-Fix]" in line]
+            lines = [
+                line
+                for line in result.stdout.strip().split("\n")
+                if line and "[CI Auto-Fix]" in line
+            ]
             return len(lines)
         return 0
     except Exception as e:
@@ -109,9 +114,11 @@ def parse_run_url(run_url: str) -> tuple[str, str, str]:
     return match.group(1), match.group(2), match.group(3)
 
 
-def get_failed_job_and_step(owner: str, repo: str, run_id: str, token: str) -> tuple[str | None, str | None]:
+def get_failed_job_and_step(
+    owner: str, repo: str, run_id: str, token: str
+) -> tuple[str | None, str | None]:
     """GitHub Jobs API를 사용하여 실패한 job과 step 찾기.
-    
+
     Returns:
         (failed_job_name, failed_step_name)
     """
@@ -120,12 +127,12 @@ def get_failed_job_and_step(owner: str, repo: str, run_id: str, token: str) -> t
         "Authorization": f"token {token}",
         "Accept": "application/vnd.github.v3+json",
     }
-    
+
     try:
         response = httpx.get(url, headers=headers, params={"per_page": 100}, timeout=30.0)
         response.raise_for_status()
         data = response.json()
-        
+
         jobs = data.get("jobs", [])
         for job in jobs:
             if job.get("conclusion") == "failure":
@@ -138,11 +145,11 @@ def get_failed_job_and_step(owner: str, repo: str, run_id: str, token: str) -> t
                         return job_name, step_name
                 # step이 없으면 job name 반환
                 return job_name, job_name
-        
+
         # 실패한 job이 없으면 첫 번째 job 반환 (fallback)
         if jobs:
             return jobs[0].get("name", "unknown"), "unknown"
-        
+
         return None, None
     except httpx.HTTPError as e:
         logger.error(f"Failed to get jobs: {e}")
@@ -154,7 +161,7 @@ def get_failed_job_and_step(owner: str, repo: str, run_id: str, token: str) -> t
 
 def get_job_logs(owner: str, repo: str, job_id: int, token: str) -> str:
     """Job logs 다운로드 및 파싱.
-    
+
     Returns:
         로그 텍스트 (최대 40줄의 에러 부분)
     """
@@ -163,47 +170,51 @@ def get_job_logs(owner: str, repo: str, job_id: int, token: str) -> str:
         "Authorization": f"token {token}",
         "Accept": "application/vnd.github.v3+json",
     }
-    
+
     try:
         response = httpx.get(url, headers=headers, timeout=60.0, follow_redirects=True)
         response.raise_for_status()
-        
+
         # Content-Type 확인
         content_type = response.headers.get("content-type", "")
         content = response.content
-        
+
         # gzip 압축 해제 시도
         if "gzip" in content_type or content.startswith(b"\x1f\x8b"):
             try:
                 content = gzip.decompress(content)
             except Exception:
                 pass  # gzip이 아니면 그대로 사용
-        
+
         # 텍스트로 변환
         try:
             text = content.decode("utf-8")
         except UnicodeDecodeError:
             text = content.decode("utf-8", errors="ignore")
-        
+
         # 마지막 에러 부분 추출 (최대 40줄)
         lines = text.split("\n")
         # 에러가 있는 부분 찾기
         error_lines = []
         for i in range(len(lines) - 1, max(0, len(lines) - 100), -1):
             line = lines[i]
-            if any(keyword in line.lower() for keyword in ["error", "failed", "exception", "traceback"]):
+            if any(
+                keyword in line.lower() for keyword in ["error", "failed", "exception", "traceback"]
+            ):
                 error_lines.insert(0, line)
                 if len(error_lines) >= 40:
                     break
-        
+
         if error_lines:
             return "\n".join(error_lines[-40:])
-        
+
         # 에러가 없으면 마지막 40줄 반환
         return "\n".join(lines[-40:])
-        
+
     except httpx.HTTPStatusError as e:
-        logger.error(f"Failed to fetch logs: status_code={e.response.status_code}, body={e.response.text[:500]}")
+        logger.error(
+            f"Failed to fetch logs: status_code={e.response.status_code}, body={e.response.text[:500]}"
+        )
         return f"could not fetch logs: status_code={e.response.status_code}, body={e.response.text[:200]}"
     except httpx.HTTPError as e:
         logger.error(f"Failed to fetch logs: {e}")
@@ -220,21 +231,21 @@ def get_failed_job_id(owner: str, repo: str, run_id: str, token: str) -> int | N
         "Authorization": f"token {token}",
         "Accept": "application/vnd.github.v3+json",
     }
-    
+
     try:
         response = httpx.get(url, headers=headers, params={"per_page": 100}, timeout=30.0)
         response.raise_for_status()
         data = response.json()
-        
+
         jobs = data.get("jobs", [])
         for job in jobs:
             if job.get("conclusion") == "failure":
                 return job.get("id")
-        
+
         # 실패한 job이 없으면 첫 번째 job 반환
         if jobs:
             return jobs[0].get("id")
-        
+
         return None
     except Exception as e:
         logger.error(f"Error getting failed job ID: {e}")
@@ -262,9 +273,9 @@ def map_failure_reason(step_name: str | None, job_name: str | None) -> str:
     """Step name 또는 job name으로부터 failure_reason 매핑."""
     if not step_name and not job_name:
         return CIFailureReason.UNKNOWN
-    
+
     search_text = (step_name or "").lower() + " " + (job_name or "").lower()
-    
+
     if "ruff" in search_text:
         if "format" in search_text:
             return CIFailureReason.RUFF_FORMAT
@@ -282,33 +293,35 @@ def analyze_ci_failure(owner: str, repo: str, run_id: str, token: str) -> dict[s
     """GitHub Jobs API를 사용하여 CI 실패 원인 분석."""
     # 실패한 job과 step 찾기
     failed_job, failed_step = get_failed_job_and_step(owner, repo, run_id, token)
-    
+
     # failure_reason 매핑
     failure_reason = map_failure_reason(failed_step, failed_job)
-    
+
     # 실패한 job ID 가져오기
     job_id = get_failed_job_id(owner, repo, run_id, token)
-    
+
     # 로그 가져오기
     error_message = ""
     if job_id:
         error_message = get_job_logs(owner, repo, job_id, token)
     else:
         error_message = "could not fetch logs: job_id not found"
-    
+
     # failed_step이 없으면 job name 사용
     if not failed_step:
         failed_step = failed_job or "unknown"
-    
+
     # failed_job이 없으면 job name 사용
     if not failed_job:
         failed_job = "unknown"
-    
+
     return {
         "failure_reason": failure_reason,
         "failed_step": failed_step,
         "failed_job": failed_job,
-        "error_message": error_message[:2000] if error_message else "No specific error message found",
+        "error_message": error_message[:2000]
+        if error_message
+        else "No specific error message found",
     }
 
 
@@ -319,7 +332,7 @@ def can_auto_fix(failure_reason: str) -> bool:
 
 def apply_fixes(failure_reason: str) -> tuple[bool, str]:
     """자동 수정 적용 및 재검증.
-    
+
     Returns:
         (success: bool, error_message: str)
     """
@@ -335,7 +348,7 @@ def apply_fixes(failure_reason: str) -> tuple[bool, str]:
             logger.info(f"Ruff fixes: returncode={result1.returncode}")
             if result1.stdout:
                 logger.info(f"Ruff output: {result1.stdout[:500]}")
-            
+
             logger.info("Applying ruff format...")
             result2 = subprocess.run(
                 ["ruff", "format", "."],
@@ -347,7 +360,7 @@ def apply_fixes(failure_reason: str) -> tuple[bool, str]:
                 error_msg = result2.stdout + result2.stderr
                 logger.error(f"ruff format failed: {error_msg[:500]}")
                 return False, error_msg[:2000]
-            
+
             # 재검증: ruff check
             logger.info("Re-validating ruff check...")
             result3 = subprocess.run(
@@ -360,7 +373,7 @@ def apply_fixes(failure_reason: str) -> tuple[bool, str]:
                 error_msg = result3.stdout + result3.stderr
                 logger.error(f"Ruff check re-validation failed: {error_msg[:500]}")
                 return False, error_msg[:2000]
-            
+
             # 재검증: ruff format --check
             logger.info("Re-validating ruff format...")
             result4 = subprocess.run(
@@ -373,7 +386,7 @@ def apply_fixes(failure_reason: str) -> tuple[bool, str]:
                 error_msg = result4.stdout + result4.stderr
                 logger.error(f"Ruff format re-validation failed: {error_msg[:500]}")
                 return False, error_msg[:2000]
-            
+
             logger.info("Ruff fixes applied and validated successfully")
             return True, ""
 
@@ -389,7 +402,7 @@ def apply_fixes(failure_reason: str) -> tuple[bool, str]:
                 error_msg = result1.stdout + result1.stderr
                 logger.error(f"ruff format failed: {error_msg[:500]}")
                 return False, error_msg[:2000]
-            
+
             # 재검증: ruff format --check
             logger.info("Re-validating ruff format...")
             result2 = subprocess.run(
@@ -402,7 +415,7 @@ def apply_fixes(failure_reason: str) -> tuple[bool, str]:
                 error_msg = result2.stdout + result2.stderr
                 logger.error(f"Ruff format re-validation failed: {error_msg[:500]}")
                 return False, error_msg[:2000]
-            
+
             logger.info("Ruff format applied and validated successfully")
             return True, ""
 
@@ -427,7 +440,7 @@ def has_changes() -> bool:
         )
         if result.stdout.strip():
             return True
-        
+
         # Staged 파일 확인
         result = subprocess.run(
             ["git", "diff", "--cached", "--name-only"],
@@ -437,7 +450,7 @@ def has_changes() -> bool:
         )
         if result.stdout.strip():
             return True
-        
+
         # Untracked 파일 확인
         result = subprocess.run(
             ["git", "status", "--porcelain"],
@@ -608,7 +621,7 @@ def main():
             error_snippet = "\n".join(error_lines[-60:]) if len(error_lines) > 60 else fix_error
             if len(error_snippet) > 2000:
                 error_snippet = error_snippet[-2000:]
-            
+
             send(
                 AlertLevel.DECISION_REQUIRED,
                 "decisions",
@@ -709,4 +722,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

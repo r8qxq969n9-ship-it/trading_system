@@ -3,6 +3,7 @@
 import enum
 from uuid import uuid4
 
+from sqlalchemy import JSON as sa_JSON
 from sqlalchemy import (
     Boolean,
     Column,
@@ -16,9 +17,8 @@ from sqlalchemy import (
 from sqlalchemy import (
     Enum as SQLEnum,
 )
-from sqlalchemy import JSON as sa_JSON
 from sqlalchemy.dialects import postgresql
-from sqlalchemy.dialects.postgresql import JSONB, TIMESTAMP
+from sqlalchemy.dialects.postgresql import TIMESTAMP
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import declarative_base, relationship
 

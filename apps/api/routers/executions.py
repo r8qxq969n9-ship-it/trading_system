@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from apps.api.main import get_db
 from packages.brokers import get_broker
 from packages.core.models import (
+    AlertLevel,
     Execution,
     ExecutionStatus,
     Fill,
@@ -23,7 +24,6 @@ from packages.core.models import (
     RunKind,
     RunStatus,
 )
-from packages.core.models import AlertLevel
 from packages.core.order_builder import OrderBuilder
 from packages.core.schemas import ExecutionResponse, ExecutionStartRequest
 from packages.ops.audit import record_audit_event
@@ -94,9 +94,7 @@ async def start_execution(
     db.commit()
 
     # 3. Get latest portfolio snapshot
-    portfolio_snapshot = db.query(PortfolioSnapshot).order_by(
-        PortfolioSnapshot.asof.desc()
-    ).first()
+    portfolio_snapshot = db.query(PortfolioSnapshot).order_by(PortfolioSnapshot.asof.desc()).first()
     if not portfolio_snapshot:
         execution.status = ExecutionStatus.FAILED
         execution.error = "No portfolio snapshot found"
@@ -120,14 +118,16 @@ async def start_execution(
 
     for item in plan_items:
         current_price = quote_map.get(item.symbol, 100.0)  # Default stub price
-        plan_items_dict.append({
-            "symbol": item.symbol,
-            "market": item.market.value,
-            "current_weight": float(item.current_weight),
-            "target_weight": float(item.target_weight),
-            "delta_weight": float(item.delta_weight),
-            "current_price": current_price,
-        })
+        plan_items_dict.append(
+            {
+                "symbol": item.symbol,
+                "market": item.market.value,
+                "current_weight": float(item.current_weight),
+                "target_weight": float(item.target_weight),
+                "delta_weight": float(item.delta_weight),
+                "current_price": current_price,
+            }
+        )
 
     # 6. Build orders (SELL → BUY)
     order_dicts = OrderBuilder.build_orders(plan_items_dict, cash_available, nav)
@@ -141,7 +141,6 @@ async def start_execution(
         side = order_dict["side"]
         qty = float(order_dict["qty"])
         limit_price = float(order_dict.get("limit_price", 0))
-        market = order_dict["market"]
 
         # Check if skipped
         if order_dict.get("status") == "SKIPPED":
@@ -226,14 +225,16 @@ async def start_execution(
     # 10. Send Slack notification (spam prevention: only if execution just completed)
     if execution.status == ExecutionStatus.DONE:
         orders_count = db.query(Order).filter(Order.execution_id == execution.id).count()
-        filled_count = db.query(Order).filter(
-            Order.execution_id == execution.id,
-            Order.status == OrderStatus.FILLED
-        ).count()
-        skipped_count = db.query(Order).filter(
-            Order.execution_id == execution.id,
-            Order.status == OrderStatus.SKIPPED
-        ).count()
+        filled_count = (
+            db.query(Order)
+            .filter(Order.execution_id == execution.id, Order.status == OrderStatus.FILLED)
+            .count()
+        )
+        skipped_count = (
+            db.query(Order)
+            .filter(Order.execution_id == execution.id, Order.status == OrderStatus.SKIPPED)
+            .count()
+        )
 
         send(
             level=AlertLevel.INFO,
