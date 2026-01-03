@@ -3,7 +3,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from apps.api.main import get_db
+from apps.api.dependencies import get_db
 from packages.core.models import ConfigVersion
 from packages.core.schemas import ConfigVersionCreate, ConfigVersionResponse
 

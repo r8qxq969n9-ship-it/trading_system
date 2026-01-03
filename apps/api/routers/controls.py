@@ -5,7 +5,7 @@ from datetime import datetime
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
-from apps.api.main import get_db
+from apps.api.dependencies import get_db
 from packages.core.models import Control
 from packages.core.schemas import ControlResponse, KillSwitchRequest
 
