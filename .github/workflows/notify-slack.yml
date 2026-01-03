@@ -1,43 +1,31 @@
 name: Notify Slack
 
 on:
-  pull_request:
-    types: [opened, synchronize]
-  push:
-    branches: [main]
   workflow_run:
     workflows: ["CI"]
     types: [completed]
-  release:
-    types: [published]
 
 jobs:
   notify:
     runs-on: ubuntu-latest
-    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion != 'cancelled'
+    if: github.event.workflow_run.conclusion != 'cancelled'
     steps:
-      - uses: actions/checkout@v4
-
       - name: Notify Slack (if webhook configured)
-        if: env.SLACK_WEBHOOK_DEV != ''
         env:
           SLACK_WEBHOOK_DEV: ${{ secrets.SLACK_WEBHOOK_DEV }}
         run: |
           if [ -z "$SLACK_WEBHOOK_DEV" ]; then
-            echo "SLACK_WEBHOOK_DEV not configured, skipping notification"
+            echo "SLACK_WEBHOOK_DEV not configured, skipping notification (no-op)"
             exit 0
           fi
           
-          MESSAGE=""
-          if [ "${{ github.event_name }}" == "pull_request" ]; then
-            MESSAGE="PR ${{ github.event.pull_request.title }} - ${{ github.event.action }}"
-          elif [ "${{ github.event_name }}" == "push" ]; then
-            MESSAGE="Push to ${{ github.ref }} - ${{ github.event.head_commit.message }}"
-          elif [ "${{ github.event_name }}" == "workflow_run" ]; then
-            MESSAGE="CI ${{ github.event.workflow_run.conclusion }}"
-          elif [ "${{ github.event_name }}" == "release" ]; then
-            MESSAGE="Release ${{ github.event.release.tag_name }}"
-          fi
+          CONCLUSION="${{ github.event.workflow_run.conclusion }}"
+          BRANCH="${{ github.event.workflow_run.head_branch }}"
+          SHA7="${{ github.event.workflow_run.head_sha }}"
+          SHA7_SHORT="${SHA7:0:7}"
+          RUN_URL="${{ github.event.workflow_run.html_url }}"
+          
+          MESSAGE="[CI] ${CONCLUSION} ${BRANCH} ${SHA7_SHORT} ${RUN_URL}"
           
           curl -X POST -H 'Content-type: application/json' \
             --data "{\"text\":\"$MESSAGE\"}" \
