@@ -110,10 +110,14 @@ async def test_end_to_end_flow(db_session, setup_test_data):
     # Verify audit event
     from packages.core.models import AuditEvent
 
-    audit_events = db_session.query(AuditEvent).filter(
-        AuditEvent.ref_id == plan_id,
-        AuditEvent.event_type == "plan_created",
-    ).all()
+    audit_events = (
+        db_session.query(AuditEvent)
+        .filter(
+            AuditEvent.ref_id == plan_id,
+            AuditEvent.event_type == "plan_created",
+        )
+        .all()
+    )
     assert len(audit_events) > 0
 
     # 2. Approve plan
@@ -131,10 +135,14 @@ async def test_end_to_end_flow(db_session, setup_test_data):
     assert plan.approved_at is not None
 
     # Verify audit event
-    audit_events = db_session.query(AuditEvent).filter(
-        AuditEvent.ref_id == plan_id,
-        AuditEvent.event_type == "plan_approved",
-    ).all()
+    audit_events = (
+        db_session.query(AuditEvent)
+        .filter(
+            AuditEvent.ref_id == plan_id,
+            AuditEvent.event_type == "plan_approved",
+        )
+        .all()
+    )
     assert len(audit_events) > 0
 
     # 3. Start execution
@@ -174,10 +182,14 @@ async def test_end_to_end_flow(db_session, setup_test_data):
     assert len(execute_run) > 0
 
     # Verify audit event
-    audit_events = db_session.query(AuditEvent).filter(
-        AuditEvent.ref_id == execution_id,
-        AuditEvent.event_type == "execution_completed",
-    ).all()
+    audit_events = (
+        db_session.query(AuditEvent)
+        .filter(
+            AuditEvent.ref_id == execution_id,
+            AuditEvent.event_type == "execution_completed",
+        )
+        .all()
+    )
     assert len(audit_events) > 0
 
     # 4. Verify execution is idempotent (can call again)

@@ -9,7 +9,7 @@ class OrderBuilder:
     @staticmethod
     def build_orders(plan_items: list[dict], cash_available: float, nav: float) -> list[dict]:
         """Build orders from plan items. SELL first, then BUY.
-        
+
         Args:
             plan_items: List of plan items with delta_weight (as NAV ratio)
             cash_available: Available cash
